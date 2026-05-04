@@ -1,0 +1,277 @@
+"""
+Secure Agentic Workflow Orchestrator
+======================================
+บริหารจัดการและเชื่อมต่อทั้งหมดระบบ Task 4, 5, 6, 7
+
+Author: CONSAT PoC Team
+Date: May 4, 2026
+"""
+
+import time
+import json
+from typing import Dict, Optional
+from sensitivity_router_prototype import SensitivityRouter
+from data_masking_prototype import DataMaskingPipeline
+from policy_enforcement_prototype import PolicyEnforcementPipeline
+from monitoring_dashboard_prototype import MonitoringDashboard
+
+
+class SecureAgenticWorkflow:
+    """
+    Orchestrator สำหรับ Secure Agentic Workflow
+    
+    รวมทั้งหมด:
+    - Task 4: Sensitivity Router
+    - Task 5: Data Masking Engine
+    - Task 6: Policy Enforcement
+    - Task 7: Monitoring Dashboard
+    """
+    
+    def __init__(self):
+        """Initialize all components"""
+        self.router = SensitivityRouter()
+        self.masking = DataMaskingPipeline()
+        self.policy = PolicyEnforcementPipeline()
+        self.monitoring = MonitoringDashboard()
+        self.request_history = []
+    
+    def process(self, user_input: str, llm_output: Optional[str] = None) -> Dict:
+        """
+        Process user input through the entire secure workflow
+        
+        Args:
+            user_input (str): Original input from user/Cline
+            llm_output (Optional[str]): Optional - output from LLM to validate
+        
+        Returns:
+            Dict: Final result with all checks and decisions
+        """
+        start_time = time.time()
+        
+        print(f"\n{'='*80}")
+        print("🔐 SECURE AGENTIC WORKFLOW PROCESSING")
+        print(f"{'='*80}")
+        
+        # ========== Step 1: Sensitivity Router ==========
+        print(f"\n[Step 1] 🔍 Sensitivity Analysis...")
+        routing_result = self.router.route(user_input)
+        use_local = routing_result['use_local_llm']
+        
+        print(f"  ├─ Sensitivity Level: {routing_result['sensitivity_level'].upper()}")
+        print(f"  ├─ Detected Patterns: {routing_result['detected_patterns']}")
+        print(f"  └─ Decision: {routing_result['routing_decision'].upper()}")
+        
+        # ========== Step 2: Route Decision ==========
+        if use_local:
+            print(f"\n[Step 2] 📍 Routing Decision: LOCAL LLM (High Security)")
+            masked_input = user_input
+            masking_info = None
+            llm_to_use = "local"
+        else:
+            print(f"\n[Step 2] 📍 Routing Decision: CLOUD LLM (Fast)")
+            
+            # ========== Step 3: Data Masking ==========
+            print(f"\n[Step 3] 🔒 Data Masking...")
+            masked_input, masking_info = self.masking.process_for_cloud(user_input)
+            
+            print(f"  ├─ Masked Items: {sum(len(v) for v in masking_info['masked_items'].values())}")
+            print(f"  └─ Mapping ID: {masking_info['mapping_id']}")
+            
+            llm_to_use = "cloud"
+        
+        # ========== Step 4: LLM Processing (Simulated) ==========
+        print(f"\n[Step 4] 🤖 LLM Processing ({llm_to_use.upper()})...")
+        final_output = llm_output if llm_output else f"[Generated response based on input]"
+        print(f"  └─ Output: {final_output[:60]}...")
+        
+        # ========== Step 5: De-masking (if Cloud) ==========
+        if not use_local and llm_output and masking_info:
+            print(f"\n[Step 5] 🔓 De-masking...")
+            final_output = self.masking.restore_output(final_output)
+            print(f"  └─ Restored: {final_output[:60]}...")
+        
+        # ========== Step 6: Policy Enforcement ==========
+        print(f"\n[Step 6] 📋 Policy Enforcement Check...")
+        policy_result = self.policy.validate_ai_output(final_output)
+        approved = policy_result['code_approved']
+        
+        if approved:
+            print(f"  ✅ APPROVED (0 critical violations)")
+        else:
+            print(f"  ❌ REJECTED ({policy_result['critical_violations']} critical violations)")
+            if policy_result['violations']:
+                for violation in policy_result['violations'][:2]:
+                    print(f"     - [{violation['severity'].upper()}] {violation['message']}")
+        
+        # ========== Step 7: Monitoring ==========
+        print(f"\n[Step 7] 📊 Recording Metrics...")
+        processing_time = (time.time() - start_time) * 1000  # Convert to ms
+        
+        masked_count = 0
+        if masking_info:
+            masked_count = sum(len(v) for v in masking_info['masked_items'].values())
+        
+        violation_count = policy_result['critical_violations']
+        
+        self.monitoring.record_request(
+            routing_decision="local" if use_local else "cloud",
+            processing_time=processing_time,
+            masked_items=masked_count,
+            policy_violations=violation_count,
+        )
+        
+        print(f"  ├─ Processing Time: {processing_time:.2f}ms")
+        print(f"  ├─ Route: {'LOCAL' if use_local else 'CLOUD'}")
+        print(f"  ├─ Masked Items: {masked_count}")
+        print(f"  └─ Policy Violations: {violation_count}")
+        
+        # ========== Final Result ==========
+        result = {
+            'request_id': f"req_{int(time.time() * 1000)}",
+            'status': 'approved' if approved else 'rejected',
+            'timestamp': time.time(),
+            'routing': {
+                'decision': routing_result['routing_decision'],
+                'reason': routing_result['reason'],
+                'llm_used': llm_to_use,
+                'sensitivity_level': routing_result['sensitivity_level'],
+            },
+            'masking': masking_info,
+            'policy_check': {
+                'approved': approved,
+                'total_violations': policy_result['total_violations'],
+                'critical_violations': policy_result['critical_violations'],
+                'violations': policy_result['violations'],
+            },
+            'metrics': {
+                'processing_time_ms': f"{processing_time:.2f}",
+                'masked_items_count': masked_count,
+            },
+            'final_output': final_output if approved else None,
+        }
+        
+        # Store in history
+        self.request_history.append(result)
+        
+        print(f"\n{'='*80}")
+        print(f"✅ WORKFLOW COMPLETE - Status: {result['status'].upper()}")
+        print(f"{'='*80}\n")
+        
+        return result
+    
+    def show_dashboard(self):
+        """Display monitoring dashboard"""
+        self.monitoring.display_dashboard()
+    
+    def get_stats(self) -> Dict:
+        """Get workflow statistics"""
+        if not self.request_history:
+            return {'total_requests': 0}
+        
+        approved_count = sum(1 for r in self.request_history if r['status'] == 'approved')
+        rejected_count = sum(1 for r in self.request_history if r['status'] == 'rejected')
+        local_count = sum(1 for r in self.request_history if r['routing']['llm_used'] == 'local')
+        cloud_count = sum(1 for r in self.request_history if r['routing']['llm_used'] == 'cloud')
+        
+        total_time = sum(float(r['metrics']['processing_time_ms']) for r in self.request_history)
+        avg_time = total_time / len(self.request_history) if self.request_history else 0
+        
+        return {
+            'total_requests': len(self.request_history),
+            'approved': approved_count,
+            'rejected': rejected_count,
+            'approval_rate': f"{(approved_count / len(self.request_history) * 100):.1f}%" if self.request_history else "0%",
+            'local_llm_used': local_count,
+            'cloud_llm_used': cloud_count,
+            'avg_processing_time_ms': f"{avg_time:.2f}",
+        }
+    
+    def export_logs(self, filepath: str):
+        """Export all audit logs and metrics"""
+        data = {
+            'workflow_stats': self.get_stats(),
+            'request_history': self.request_history,
+            'dashboard_health': self.monitoring.get_health_status(),
+        }
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        
+        print(f"✅ Logs exported to {filepath}")
+
+
+# ============== Test Cases ==============
+
+if __name__ == "__main__":
+    print("\n" + "=" * 80)
+    print("SECURE AGENTIC WORKFLOW - INTEGRATION TEST")
+    print("=" * 80)
+    
+    workflow = SecureAgenticWorkflow()
+    
+    # Test Case 1: Safe Code Query -> Cloud LLM
+    print("\n\n📌 TEST CASE 1: Simple Python Function")
+    result1 = workflow.process(
+        user_input="สร้างฟังก์ชัน Python สำหรับคำนวณค่าเฉลี่ยของ list",
+        llm_output="def calculate_average(items):\n    return sum(items) / len(items)"
+    )
+    print(f"Result: {result1['status'].upper()}")
+    
+    # Test Case 2: Sensitive Code Query -> Local LLM
+    print("\n\n📌 TEST CASE 2: Database Connection (SENSITIVE)")
+    result2 = workflow.process(
+        user_input="สร้าง API client สำหรับเชื่อมต่อ postgresql://admin:MyPassword@db.internal:5432/users",
+        llm_output="from config import get_db\ndb = get_db()"
+    )
+    print(f"Result: {result2['status'].upper()}")
+    
+    # Test Case 3: Code with Security Issues
+    print("\n\n📌 TEST CASE 3: Code with Hardcoded Password")
+    result3 = workflow.process(
+        user_input="ช่วยฉันเชื่อมต่อ database",
+        llm_output='''
+def connect_db():
+    conn = mysql.connector.connect(
+        host="db.internal",
+        user="admin",
+        password="MySecret123",
+        database="users"
+    )
+    return conn
+        '''
+    )
+    print(f"Result: {result3['status'].upper()}")
+    
+    # Test Case 4: Safe API Code
+    print("\n\n📌 TEST CASE 4: Safe API Code")
+    result4 = workflow.process(
+        user_input="ช่วยฉันเขียน FastAPI endpoint",
+        llm_output='''
+from fastapi import FastAPI
+from config import get_api_key
+
+app = FastAPI()
+
+@app.get("/api/users")
+def get_users():
+    api_key = get_api_key()
+    return {"users": []}
+        '''
+    )
+    print(f"Result: {result4['status'].upper()}")
+    
+    # Display Dashboard
+    print("\n\n📊 SHOWING DASHBOARD")
+    workflow.show_dashboard()
+    
+    # Show Stats
+    print("\n📈 WORKFLOW STATISTICS")
+    print("=" * 80)
+    stats = workflow.get_stats()
+    for key, value in stats.items():
+        print(f"{key}: {value}")
+    
+    # Export Logs
+    workflow.export_logs('workflow_logs.json')
+    
+    print("\n✅ Integration test complete!")

@@ -1,0 +1,142 @@
+{
+  "workflow_stats": {
+    "total_requests": 4,
+    "approved": 3,
+    "rejected": 1,
+    "approval_rate": "75.0%",
+    "local_llm_used": 1,
+    "cloud_llm_used": 3,
+    "avg_processing_time_ms": "2.32"
+  },
+  "request_history": [
+    {
+      "request_id": "req_1777926091859",
+      "status": "approved",
+      "timestamp": 1777926091.8593132,
+      "routing": {
+        "decision": "cloud",
+        "reason": "ข้อมูล LOW SENSITIVITY -> ส่งไป Cloud LLM สำหรับความเร็ว",
+        "llm_used": "cloud",
+        "sensitivity_level": "low"
+      },
+      "masking": {
+        "masked_text": "สร้างฟังก์ชัน Python สำหรับคำนวณค่าเฉลี่ยของ list",
+        "masked_items": {},
+        "mapping_id": "mapping_2eafea68"
+      },
+      "policy_check": {
+        "approved": true,
+        "total_violations": 0,
+        "critical_violations": 0,
+        "violations": []
+      },
+      "metrics": {
+        "processing_time_ms": "3.63",
+        "masked_items_count": 0
+      },
+      "final_output": "def calculate_average(items):\n    return sum(items) / len(items)"
+    },
+    {
+      "request_id": "req_1777926091865",
+      "status": "approved",
+      "timestamp": 1777926091.8655088,
+      "routing": {
+        "decision": "local",
+        "reason": "ข้อมูล HIGH SENSITIVITY -> บังคับใช้ Local LLM สำหรับความปลอดภัย",
+        "llm_used": "local",
+        "sensitivity_level": "high"
+      },
+      "masking": null,
+      "policy_check": {
+        "approved": true,
+        "total_violations": 0,
+        "critical_violations": 0,
+        "violations": []
+      },
+      "metrics": {
+        "processing_time_ms": "1.02",
+        "masked_items_count": 0
+      },
+      "final_output": "from config import get_db\ndb = get_db()"
+    },
+    {
+      "request_id": "req_1777926091869",
+      "status": "rejected",
+      "timestamp": 1777926091.8695672,
+      "routing": {
+        "decision": "cloud",
+        "reason": "ข้อมูล LOW SENSITIVITY -> ส่งไป Cloud LLM สำหรับความเร็ว",
+        "llm_used": "cloud",
+        "sensitivity_level": "low"
+      },
+      "masking": {
+        "masked_text": "ช่วยฉันเชื่อมต่อ database",
+        "masked_items": {},
+        "mapping_id": "mapping_e022d02c"
+      },
+      "policy_check": {
+        "approved": false,
+        "total_violations": 1,
+        "critical_violations": 1,
+        "violations": [
+          {
+            "timestamp": "2026-05-04T22:21:31.866783",
+            "violation_type": "hardcoded_password",
+            "severity": "critical",
+            "message": "Hardcoded password found - use environment variables instead",
+            "code_snippet": "password=\"MySecret123\"",
+            "recommendation": "Use os.environ.get() หรือ config management"
+          }
+        ]
+      },
+      "metrics": {
+        "processing_time_ms": "2.78",
+        "masked_items_count": 0
+      },
+      "final_output": null
+    },
+    {
+      "request_id": "req_1777926091872",
+      "status": "approved",
+      "timestamp": 1777926091.8724306,
+      "routing": {
+        "decision": "cloud",
+        "reason": "ข้อมูล LOW SENSITIVITY -> ส่งไป Cloud LLM สำหรับความเร็ว",
+        "llm_used": "cloud",
+        "sensitivity_level": "low"
+      },
+      "masking": {
+        "masked_text": "ช่วยฉันเขียน FastAPI endpoint",
+        "masked_items": {},
+        "mapping_id": "mapping_912f2893"
+      },
+      "policy_check": {
+        "approved": true,
+        "total_violations": 0,
+        "critical_violations": 0,
+        "violations": []
+      },
+      "metrics": {
+        "processing_time_ms": "1.85",
+        "masked_items_count": 0
+      },
+      "final_output": "\nfrom fastapi import FastAPI\nfrom config import get_api_key\n\napp = FastAPI()\n\n@app.get(\"/api/users\")\ndef get_users():\n    api_key = get_api_key()\n    return {\"users\": []}\n        "
+    }
+  ],
+  "dashboard_health": {
+    "health": "healthy",
+    "stats": {
+      "timestamp": "2026-05-04T22:21:31.875588",
+      "total_requests": 4,
+      "local_routing_count": 1,
+      "cloud_routing_count": 3,
+      "local_routing_percent": "25.0%",
+      "cloud_routing_percent": "75.0%",
+      "avg_processing_time_ms": "2.32",
+      "total_masking_items": 0,
+      "total_policy_violations": 1,
+      "total_alerts": 0,
+      "critical_alerts": 0
+    }
+  }
+}

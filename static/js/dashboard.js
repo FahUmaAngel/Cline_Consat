@@ -1,0 +1,355 @@
+let routingChart = null;
+let processingChart = null;
+let websocket = null;
+let refreshTimer = null;
+
+const samples = [
+    {
+        userInput: "Create a Python function to calculate an average for a list of numbers",
+        llmOutput: "def average(items):\n    return sum(items) / len(items) if items else 0",
+    },
+    {
+        userInput: "Connect to postgresql://admin:SecretPass@db.internal:5432/users and generate a repository",
+        llmOutput: "from config import get_db\n\ndef get_users():\n    return get_db().query('select * from users')",
+    },
+    {
+        userInput: "Help me connect to database",
+        llmOutput: "def connect_db():\n    return mysql.connector.connect(user=\"admin\", password=\"MySecret123\")",
+    },
+];
+
+document.addEventListener("DOMContentLoaded", () => {
+    initializeCharts();
+    bindActions();
+    connectWebSocket();
+    loadDashboard();
+    refreshTimer = setInterval(loadDashboard, 10000);
+});
+
+function bindActions() {
+    document.getElementById("run-simulation").addEventListener("click", runSimulation);
+    document.getElementById("refresh-now").addEventListener("click", loadDashboard);
+    document.getElementById("quick-safe").addEventListener("click", () => {
+        const sample = samples[Math.floor(Math.random() * samples.length)];
+        document.getElementById("userInput").value = sample.userInput;
+        document.getElementById("llmOutput").value = sample.llmOutput;
+    });
+}
+
+function initializeCharts() {
+    const chartTextColor = "#687589";
+    const gridColor = "#e8eef6";
+
+    routingChart = new Chart(document.getElementById("routingChart"), {
+        type: "doughnut",
+        data: {
+            labels: ["Local LLM", "Cloud LLM"],
+            datasets: [{
+                data: [0, 0],
+                backgroundColor: ["#2563eb", "#16a34a"],
+                borderColor: "#ffffff",
+                borderWidth: 4,
+                hoverOffset: 5,
+            }],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: "68%",
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: (context) => `${context.label}: ${context.raw}`,
+                    },
+                },
+            },
+        },
+    });
+
+    processingChart = new Chart(document.getElementById("processingChart"), {
+        type: "line",
+        data: {
+            labels: [],
+            datasets: [{
+                label: "Processing time (ms)",
+                data: [],
+                borderColor: "#0891b2",
+                backgroundColor: "rgba(8, 145, 178, 0.14)",
+                pointRadius: 3,
+                pointHoverRadius: 5,
+                tension: 0.35,
+                fill: true,
+            }],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { intersect: false, mode: "index" },
+            plugins: {
+                legend: { display: false },
+            },
+            scales: {
+                x: {
+                    ticks: { color: chartTextColor, maxRotation: 0 },
+                    grid: { display: false },
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: { color: chartTextColor },
+                    grid: { color: gridColor },
+                },
+            },
+        },
+    });
+}
+
+function connectWebSocket() {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    websocket = new WebSocket(`${protocol}//${window.location.host}/ws/metrics`);
+    setConnectionStatus("connecting");
+
+    websocket.onopen = () => setConnectionStatus("connected");
+    websocket.onmessage = (event) => {
+        const data = safeJson(event.data);
+        if (data && !data.error) {
+            updateDashboard(data);
+        }
+    };
+    websocket.onclose = () => {
+        setConnectionStatus("disconnected");
+        setTimeout(connectWebSocket, 4000);
+    };
+    websocket.onerror = () => setConnectionStatus("disconnected");
+}
+
+function setConnectionStatus(status) {
+    const statusEl = document.getElementById("connection-status");
+    const labels = {
+        connected: "Live",
+        disconnected: "Offline",
+        connecting: "Connecting",
+    };
+    statusEl.className = `status-pill status-${status}`;
+    statusEl.innerHTML = `<i class="fa-solid fa-circle"></i> ${labels[status]}`;
+}
+
+async function loadDashboard() {
+    try {
+        const response = await fetch("/api/metrics");
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        updateDashboard(await response.json());
+    } catch (error) {
+        setConnectionStatus("disconnected");
+        console.error("Dashboard refresh failed:", error);
+    }
+}
+
+function updateDashboard(data) {
+    const stats = data.stats || {};
+    const workflow = data.workflow_stats || {};
+    const health = data.health || {};
+    const alerts = data.alerts || [];
+    const history = data.history || [];
+
+    setText("total-requests", workflow.total_requests ?? stats.total_requests ?? 0);
+    setText("approval-rate", workflow.approval_rate || "0%");
+    setText("avg-processing", `${workflow.avg_processing_time_ms || stats.avg_processing_time_ms || "0"}ms`);
+
+    const healthStatus = (health.health || "unknown").toUpperCase();
+    const healthEl = document.getElementById("system-health");
+    healthEl.textContent = healthStatus;
+    healthEl.style.color = healthColor(healthStatus);
+
+    setText("route-mix", `${workflow.local_llm_used || stats.local_routing_count || 0} local / ${workflow.cloud_llm_used || stats.cloud_routing_count || 0} cloud`);
+    setText("decision-mix", `${workflow.approved || 0} approved / ${workflow.rejected || 0} rejected`);
+    setText("masked-count", `${stats.total_masking_items || 0} masked items`);
+    setText("masked-total", stats.total_masking_items || 0);
+    setText("alert-count", `${stats.total_alerts || alerts.length || 0} active alerts`);
+    setText("critical-count", `${stats.critical_alerts || 0} critical`);
+    setText("critical-total", stats.critical_alerts || 0);
+    setText("local-percent", percentLabel(workflow.local_llm_used ?? stats.local_routing_count ?? 0, workflow.total_requests ?? stats.total_requests ?? 0));
+    setText("cloud-percent", percentLabel(workflow.cloud_llm_used ?? stats.cloud_routing_count ?? 0, workflow.total_requests ?? stats.total_requests ?? 0));
+    setText("last-updated", `Updated ${formatTime(data.timestamp)}`);
+
+    updateCharts(stats, workflow);
+    updateAlerts(alerts);
+    updateHistory(history);
+    flashCards();
+}
+
+function updateCharts(stats, workflow) {
+    const localCount = Number(workflow.local_llm_used ?? stats.local_routing_count ?? 0);
+    const cloudCount = Number(workflow.cloud_llm_used ?? stats.cloud_routing_count ?? 0);
+    routingChart.data.datasets[0].data = [localCount, cloudCount];
+    routingChart.update("none");
+
+    const value = Number(workflow.avg_processing_time_ms ?? stats.avg_processing_time_ms ?? 0);
+    const labels = processingChart.data.labels;
+    const points = processingChart.data.datasets[0].data;
+
+    if (labels.length >= 20) {
+        labels.shift();
+        points.shift();
+    }
+
+    labels.push(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+    points.push(Number.isFinite(value) ? value : 0);
+    processingChart.update("none");
+}
+
+function updateAlerts(alerts) {
+    const panel = document.getElementById("alerts-panel");
+    if (!alerts.length) {
+        panel.className = "scroll-region empty-state";
+        panel.textContent = "No alerts";
+        return;
+    }
+
+    panel.className = "scroll-region";
+    panel.innerHTML = alerts.slice().reverse().map((alert) => {
+        const severity = escapeHtml(alert.severity || "info");
+        return `
+            <article class="alert-item alert-${severity}">
+                <strong>${severity.toUpperCase()}</strong>
+                <p>${escapeHtml(alert.message || "Alert")}</p>
+                <small>${formatTime(alert.timestamp)} | ${escapeHtml(alert.metric_type || "metric")}</small>
+            </article>
+        `;
+    }).join("");
+}
+
+function updateHistory(history) {
+    const panel = document.getElementById("history-panel");
+    if (!history.length) {
+        panel.className = "scroll-region empty-state";
+        panel.textContent = "No requests yet";
+        return;
+    }
+
+    panel.className = "scroll-region";
+    panel.innerHTML = history.slice().reverse().map((request) => {
+        const route = request.route || request.routing?.llm_used || "unknown";
+        const status = request.status || "unknown";
+        const sensitivity = request.sensitivity || request.routing?.sensitivity_level || "unknown";
+        const duration = request.processing_time_ms || request.metrics?.processing_time_ms || "0";
+        const masked = request.masked_items_count ?? request.metrics?.masked_items_count ?? 0;
+        const input = request.input_preview || request.user_input || request.routing?.reason || "Workflow request";
+        return `
+            <article class="history-item history-${escapeHtml(status)}">
+                <div>
+                    <div class="history-title">
+                        <span class="route-badge route-${escapeHtml(route)}">${escapeHtml(route).toUpperCase()} LLM</span>
+                        <span class="decision-badge decision-${escapeHtml(status)}">${escapeHtml(status).toUpperCase()}</span>
+                        <strong>${escapeHtml(sensitivity).toUpperCase()} sensitivity</strong>
+                    </div>
+                    <p>${escapeHtml(input)}</p>
+                </div>
+                <div class="history-meta">
+                    <div>${Number.parseFloat(duration).toFixed(2)}ms</div>
+                    <div>${masked} masked</div>
+                    <div>${formatEpoch(request.timestamp)}</div>
+                </div>
+            </article>
+        `;
+    }).join("");
+}
+
+async function runSimulation() {
+    const button = document.getElementById("run-simulation");
+    const result = document.getElementById("simulation-result");
+    const userInput = document.getElementById("userInput").value.trim();
+    const llmOutput = document.getElementById("llmOutput").value.trim();
+
+    if (!userInput) {
+        result.textContent = "User input is required.";
+        return;
+    }
+
+    button.disabled = true;
+    result.textContent = "Running workflow...";
+
+    try {
+        const response = await fetch("/api/simulate-request", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_input: userInput, llm_output: llmOutput || null }),
+        });
+        const payload = await response.json();
+        if (!payload.success) {
+            throw new Error(payload.error || "Simulation failed");
+        }
+
+        const route = payload.result.routing.llm_used.toUpperCase();
+        const status = payload.result.status.toUpperCase();
+        result.textContent = `${status} via ${route} LLM`;
+        updateDashboard(payload.dashboard);
+    } catch (error) {
+        result.textContent = error.message;
+    } finally {
+        button.disabled = false;
+    }
+}
+
+function flashCards() {
+    document.querySelectorAll(".metric-card").forEach((card) => {
+        card.classList.remove("flash");
+        requestAnimationFrame(() => card.classList.add("flash"));
+    });
+}
+
+function setText(id, value) {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value;
+}
+
+function percentLabel(value, total) {
+    const numericValue = Number(value);
+    const numericTotal = Number(total);
+    if (!numericTotal || !Number.isFinite(numericTotal)) return "0%";
+    return `${((numericValue / numericTotal) * 100).toFixed(1)}%`;
+}
+
+function formatTime(value) {
+    if (!value) return "now";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "now" : date.toLocaleTimeString();
+}
+
+function formatEpoch(value) {
+    if (!value) return "";
+    const date = new Date(value * 1000);
+    return Number.isNaN(date.getTime()) ? "" : date.toLocaleTimeString();
+}
+
+function healthColor(status) {
+    if (status === "HEALTHY") return "#16a34a";
+    if (status === "DEGRADED") return "#d97706";
+    if (status === "UNHEALTHY") return "#dc2626";
+    return "#687589";
+}
+
+function safeJson(value) {
+    try {
+        return JSON.parse(value);
+    } catch (error) {
+        console.error("Invalid JSON:", error);
+        return null;
+    }
+}
+
+function escapeHtml(value) {
+    return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+window.addEventListener("beforeunload", () => {
+    if (refreshTimer) clearInterval(refreshTimer);
+    if (websocket) websocket.close();
+});
