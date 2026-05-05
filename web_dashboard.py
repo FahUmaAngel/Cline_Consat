@@ -100,6 +100,11 @@ async def get_dashboard(request: Request):
     """Serve main dashboard page"""
     return templates.TemplateResponse("dashboard.html", {"request": request})
 
+@app.get("/dashboard.html", response_class=HTMLResponse)
+async def get_dashboard_html(request: Request):
+    """Serve dashboard page when opened by its file-like URL."""
+    return templates.TemplateResponse("dashboard.html", {"request": request})
+
 @app.get("/api/metrics")
 async def get_metrics():
     """Get current metrics data"""
@@ -208,7 +213,7 @@ if __name__ == "__main__":
 
     uvicorn.run(
         "web_dashboard:app",
-        host="127.0.0.1",
+        host="0.0.0.0",
         port=8000,
         reload=True,
         log_level="info"

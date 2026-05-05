@@ -37,6 +37,12 @@ function bindActions() {
 }
 
 function initializeCharts() {
+    if (typeof Chart === "undefined") {
+        createChartFallback("routingChart", "Routing split will appear here after telemetry loads.");
+        createChartFallback("processingChart", "Processing trend will appear here after telemetry loads.");
+        return;
+    }
+
     const chartTextColor = "#687589";
     const gridColor = "#e8eef6";
 
@@ -102,6 +108,17 @@ function initializeCharts() {
             },
         },
     });
+}
+
+function createChartFallback(canvasId, message) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+
+    const fallback = document.createElement("div");
+    fallback.id = `${canvasId}-fallback`;
+    fallback.className = "chart-fallback";
+    fallback.textContent = message;
+    canvas.replaceWith(fallback);
 }
 
 function connectWebSocket() {
@@ -183,6 +200,12 @@ function updateDashboard(data) {
 function updateCharts(stats, workflow) {
     const localCount = Number(workflow.local_llm_used ?? stats.local_routing_count ?? 0);
     const cloudCount = Number(workflow.cloud_llm_used ?? stats.cloud_routing_count ?? 0);
+
+    if (!routingChart || !processingChart) {
+        updateChartFallback(localCount, cloudCount, workflow, stats);
+        return;
+    }
+
     routingChart.data.datasets[0].data = [localCount, cloudCount];
     routingChart.update("none");
 
@@ -198,6 +221,32 @@ function updateCharts(stats, workflow) {
     labels.push(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
     points.push(Number.isFinite(value) ? value : 0);
     processingChart.update("none");
+}
+
+function updateChartFallback(localCount, cloudCount, workflow, stats) {
+    const routingFallback = document.getElementById("routingChart-fallback");
+    const processingFallback = document.getElementById("processingChart-fallback");
+    const total = localCount + cloudCount;
+    const localWidth = total ? (localCount / total) * 100 : 0;
+    const cloudWidth = total ? (cloudCount / total) * 100 : 0;
+    const processingTime = workflow.avg_processing_time_ms ?? stats.avg_processing_time_ms ?? 0;
+
+    if (routingFallback) {
+        routingFallback.innerHTML = `
+            <div class="fallback-bars" aria-label="Routing split">
+                <span class="fallback-bar local" style="width: ${localWidth}%"></span>
+                <span class="fallback-bar cloud" style="width: ${cloudWidth}%"></span>
+            </div>
+            <strong>${localCount} local / ${cloudCount} cloud</strong>
+        `;
+    }
+
+    if (processingFallback) {
+        processingFallback.innerHTML = `
+            <strong>${processingTime}ms</strong>
+            <span>average processing time</span>
+        `;
+    }
 }
 
 function updateAlerts(alerts) {

@@ -425,6 +425,53 @@ p {
     height: 290px;
 }
 
+.chart-fallback {
+    display: grid;
+    place-items: center;
+    gap: 10px;
+    height: 100%;
+    min-height: 180px;
+    padding: 18px;
+    border: 1px dashed var(--line);
+    border-radius: 8px;
+    background: var(--panel-soft);
+    color: var(--muted);
+    text-align: center;
+}
+
+.chart-fallback strong {
+    display: block;
+    color: var(--ink);
+    font-size: 24px;
+}
+
+.chart-fallback span {
+    color: var(--muted);
+}
+
+.fallback-bars {
+    display: flex;
+    width: min(260px, 100%);
+    height: 16px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #e2e8f0;
+}
+
+.fallback-bar {
+    display: block;
+    min-width: 4px;
+    height: 100%;
+}
+
+.fallback-bar.local {
+    background: var(--blue);
+}
+
+.fallback-bar.cloud {
+    background: var(--green);
+}
+
 .donut-box {
     height: 270px;
 }
