@@ -22,6 +22,8 @@ import uvicorn
 # Import our existing components
 from monitoring_dashboard_prototype import MonitoringDashboard
 from secure_agentic_workflow import SecureAgenticWorkflow
+import stockholm_bus_data as bus_db
+import data_policy
 
 # Global components
 dashboard = None
@@ -104,6 +106,43 @@ async def get_dashboard(request: Request):
 async def get_dashboard_html(request: Request):
     """Serve dashboard page when opened by its file-like URL."""
     return templates.TemplateResponse("dashboard.html", {"request": request})
+
+@app.get("/data-explorer", response_class=HTMLResponse)
+async def get_data_explorer(request: Request):
+    """Serve data explorer page."""
+    return templates.TemplateResponse("data-explorer.html", {"request": request})
+
+@app.get("/api/bus-data")
+async def get_bus_data(table: str = "bus_routes", view: str = "internal"):
+    """Get bus data with optional policy filtering."""
+    table_data_map = {
+        "bus_routes": bus_db.BUS_ROUTES,
+        "bus_vehicles": bus_db.BUS_VEHICLES,
+        "drivers": bus_db.DRIVERS,
+        "iot_sensor_readings": bus_db.IOT_SENSOR_READINGS,
+    }
+    raw = table_data_map.get(table, [])
+    if not raw:
+        raise HTTPException(status_code=404, detail=f"Unknown table: {table}")
+    if view == "external":
+        filtered = data_policy.filter_for_external(table, raw)
+        return {"table": table, "view": "external", "data": filtered, "count": len(filtered)}
+    return {"table": table, "view": "internal", "data": raw, "count": len(raw)}
+
+@app.get("/api/data-policy")
+async def get_data_policy(table: str = None):
+    """Get policy metadata for tables."""
+    if table:
+        return {"table": table, "policy": data_policy.get_table_policy_summary(table),
+                "fields": data_policy.POLICY_TABLE.get(table, {})}
+    return {"policies": data_policy.get_full_policy_summary(),
+            "all_fields": data_policy.POLICY_TABLE}
+
+@app.post("/api/classify-query")
+async def classify_query(request_data: dict):
+    """Classify a natural-language query."""
+    query = request_data.get("query", "")
+    return data_policy.classify_query(query)
 
 @app.get("/api/metrics")
 async def get_metrics():
