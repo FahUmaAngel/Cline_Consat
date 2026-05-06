@@ -9,6 +9,11 @@ CONSAT_PII_PATTERNS = {
     "thai_citizen_id": r"\b\d{1}[- ]?\d{4}[- ]?\d{5}[- ]?\d{2}[- ]?\d{1}\b",
     "employee_id": r"\b(?:CONSAT|CSAT|EMP)[-_]?\d{4,8}\b",
     "thai_phone": r"\b(?:\+66|0)(?:6|8|9)\d[- ]?\d{3}[- ]?\d{4}\b",
+    # Stockholm bus domain PII
+    "swedish_personnummer": r"\b\d{6,8}[-]?\d{4}\b",
+    "swedish_phone": r"\b\+46\s?\d{2}\s?\d{3}\s?\d{2}\s?\d{2}\b",
+    "swedish_driver_license": r"\bSE-DL-\d{4}-\d{4,6}\b",
+    "driver_id": r"\bDRV-\d{4,6}\b",
 }
 
 CONSAT_SECRET_PATTERNS = {
@@ -17,6 +22,9 @@ CONSAT_SECRET_PATTERNS = {
     "jwt": r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b",
     "azure_connection_string": r"DefaultEndpointsProtocol=https;AccountName=[^;\s]+;AccountKey=[^;\s]+",
     "generic_bearer_token": r"Bearer\s+[A-Za-z0-9._~+/=-]{20,}",
+    # Stockholm bus domain secrets
+    "consat_iot_device_id": r"\bCONSAT-IOT-\d{4,6}\b",
+    "consat_certification": r"\bCONSAT-CERT-(?:ADV|STD|ELITE)\b",
 }
 
 CONSAT_INTERNAL_PATTERNS = {
@@ -47,6 +55,36 @@ CONSAT_SENSITIVE_KEYWORDS = {
         "bank account",
         "vendor payment",
         "purchase order",
+    ],
+    # Stockholm bus domain - company secrets (never share externally)
+    "consat_eco_drive": [
+        "eco_drive",
+        "eco-drive",
+        "ecodrive",
+        "fuel_consumption",
+        "fuel consumption",
+        "brake_wear",
+        "brake wear",
+        "engine_temp",
+        "engine temperature",
+    ],
+    "consat_iot_internal": [
+        "iot_device_id",
+        "firmware_version",
+        "consat-iot",
+        "training_certification",
+        "consat-cert",
+    ],
+    # Stockholm bus domain - PII keywords
+    "consat_driver_pii": [
+        "driver_name",
+        "full_name",
+        "personal_number",
+        "personnummer",
+        "license_number",
+        "driver phone",
+        "driver email",
+        "registration_plate",
     ],
 }
 

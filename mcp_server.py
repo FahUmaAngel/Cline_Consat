@@ -19,6 +19,8 @@ from data_masking_prototype import DataMaskingPipeline
 from policy_enforcement_prototype import PolicyEnforcementPipeline
 from secure_agentic_workflow import SecureAgenticWorkflow
 from sensitivity_router_prototype import SensitivityRouter
+import stockholm_bus_data as bus_db
+import data_policy
 
 
 router = SensitivityRouter()
@@ -79,6 +81,40 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {},
+        },
+    },
+    {
+        "name": "consat_bus_query",
+        "description": "Query Stockholm bus route, vehicle, or IoT sensor data. Policy is auto-applied: PII is hashed, company secrets are redacted for external sharing.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Natural language query about bus routes, vehicles, drivers, or sensor data. Example: 'Show drivers on line 172'"},
+                "table": {"type": "string", "description": "Optional specific table: bus_routes, bus_vehicles, drivers, iot_sensor_readings"},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "consat_driver_lookup",
+        "description": "Look up driver information by driver ID. PII fields are auto-hashed for external partners. Full data only available via local LLM.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "driver_id": {"type": "string", "description": "Driver ID, e.g. DRV-1001"},
+            },
+            "required": ["driver_id"],
+        },
+    },
+    {
+        "name": "consat_data_policy",
+        "description": "Inspect the data sharing policy rules. Shows which fields are PUBLIC, PII (hashed), or COMPANY_SECRET (redacted) for each table.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "table": {"type": "string", "description": "Optional table name to inspect. If empty, returns all tables."},
+                "query": {"type": "string", "description": "Optional query text to classify its sensitivity level."},
+            },
         },
     },
 ]
@@ -146,12 +182,76 @@ def consat_metrics(args: Dict[str, Any]) -> Dict[str, Any]:
     )
 
 
+def consat_bus_query(args: Dict[str, Any]) -> Dict[str, Any]:
+    query = args["query"]
+    # Classify the query first
+    classification = data_policy.classify_query(query)
+    # Search the database
+    raw_results = bus_db.search_data(query)
+    # Apply policy filtering for external sharing
+    filtered = {}
+    table_map = {
+        "routes": "bus_routes",
+        "vehicles": "bus_vehicles",
+        "drivers": "drivers",
+        "readings": "iot_sensor_readings",
+    }
+    for key, table_name in table_map.items():
+        if raw_results.get(key):
+            filtered[key] = data_policy.filter_for_external(table_name, raw_results[key])
+    return _content({
+        "query_classification": classification,
+        "filtered_results": filtered,
+        "record_counts": {k: len(v) for k, v in filtered.items()},
+        "policy_applied": True,
+        "note": "PII fields are hashed, COMPANY_SECRET fields are redacted for external sharing.",
+    })
+
+
+def consat_driver_lookup(args: Dict[str, Any]) -> Dict[str, Any]:
+    driver_id = args["driver_id"]
+    matches = [d for d in bus_db.DRIVERS if d["driver_id"] == driver_id]
+    if not matches:
+        return _content({"error": f"Driver {driver_id} not found", "available_ids": [d['driver_id'] for d in bus_db.DRIVERS]})
+    raw = matches[0]
+    filtered = data_policy.filter_record_for_external("drivers", raw)
+    return _content({
+        "driver_filtered": filtered,
+        "policy_applied": True,
+        "fields_hashed": [f for f, p in data_policy.POLICY_TABLE["drivers"].items() if p["action"] == "hash"],
+        "fields_encrypted": [f for f, p in data_policy.POLICY_TABLE["drivers"].items() if p["action"] == "encrypt"],
+        "fields_redacted": [f for f, p in data_policy.POLICY_TABLE["drivers"].items() if p["action"] == "redact"],
+        "note": "Full unfiltered data only available via LOCAL LLM.",
+    })
+
+
+def consat_data_policy(args: Dict[str, Any]) -> Dict[str, Any]:
+    result = {}
+    table = args.get("table")
+    query = args.get("query")
+    if table:
+        result["table_policy"] = data_policy.get_table_policy_summary(table)
+    else:
+        result["all_policies"] = data_policy.get_full_policy_summary()
+    if query:
+        result["query_classification"] = data_policy.classify_query(query)
+    result["classification_levels"] = {
+        "PUBLIC": "Share freely with external partners",
+        "PII": "Share only with hash or encryption (GDPR)",
+        "COMPANY_SECRET": "Never share externally — local LLM only",
+    }
+    return _content(result)
+
+
 TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "consat_route": consat_route,
     "consat_mask": consat_mask,
     "consat_policy_check": consat_policy_check,
     "consat_workflow_process": consat_workflow_process,
     "consat_metrics": consat_metrics,
+    "consat_bus_query": consat_bus_query,
+    "consat_driver_lookup": consat_driver_lookup,
+    "consat_data_policy": consat_data_policy,
 }
 
 
