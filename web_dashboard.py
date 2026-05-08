@@ -190,10 +190,11 @@ async def simulate_request(request_data: dict):
 
         user_input = request_data.get("user_input", "Test input")
         llm_output = request_data.get("llm_output", None)
+        force_route = request_data.get("force_route", "auto")
 
         log_buffer = io.StringIO()
         with redirect_stdout(log_buffer):
-            result = workflow.process(user_input, llm_output)
+            result = workflow.process(user_input, llm_output, force_route=force_route)
         result["user_input"] = user_input
 
         return {

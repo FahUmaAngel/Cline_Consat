@@ -160,6 +160,13 @@
                         <label for="userInput">User input</label>
                         <textarea id="userInput" rows="4">What is the standard bus route for line 172 in Stockholm?</textarea>
                         
+                        <label for="routeOverride" style="margin-top: 12px;">LLM Routing Override</label>
+                        <select id="routeOverride" class="text-input" style="width: 100%; margin-bottom: 12px; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background-color: var(--surface);">
+                            <option value="auto">Auto (Sensitivity Router)</option>
+                            <option value="cloud">Force Cloud LLM (Gemini)</option>
+                            <option value="local">Force Local LLM (Gemini)</option>
+                        </select>
+
                         <button id="run-simulation" class="primary-button" type="button" style="margin-top: 6px;">
                             <i class="fa-solid fa-play"></i> Run Simulation
                         </button>

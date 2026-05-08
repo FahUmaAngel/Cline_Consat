@@ -75,13 +75,15 @@ class SecureAgenticWorkflow:
             print(f"      [API] Error calling OpenRouter: {e}")
             return f"[Simulated Output due to API Error] Could not reach OpenRouter API: {e}"
     
-    def process(self, user_input: str, llm_output: Optional[str] = None) -> Dict:
+    def process(self, user_input: str, llm_output: Optional[str] = None, force_route: str = "auto") -> Dict:
         """
         Process user input through the entire secure workflow
         
         Args:
             user_input (str): Original input from user/Cline
             llm_output (Optional[str]): Optional - output from LLM to validate
+            force_route (str): "auto", "cloud", or "local" to bypass router
+        
         
         Returns:
             Dict: Final result with all checks and decisions
@@ -95,7 +97,20 @@ class SecureAgenticWorkflow:
         # ========== Step 1: Sensitivity Router ==========
         print(f"\n[Step 1] 🔍 Sensitivity Analysis...")
         routing_result = self.router.route(user_input)
-        use_local = routing_result['use_local_llm']
+        
+        if force_route == "cloud":
+            if routing_result['sensitivity_level'] == SensitivityLevel.HIGH.value:
+                print(f"  ❌ SECURITY BLOCK: Cannot force HIGH sensitivity data to CLOUD")
+                use_local = True
+                routing_result['reason'] = "Override BLOCKED (High Sensitivity Forced Local)"
+            else:
+                use_local = False
+                routing_result['reason'] = "Manual Override (Cloud)"
+        elif force_route == "local":
+            use_local = True
+            routing_result['reason'] = "Manual Override (Local)"
+        else:
+            use_local = routing_result['use_local_llm']
         
         print(f"  ├─ Sensitivity Level: {routing_result['sensitivity_level'].upper()}")
         print(f"  ├─ Detected Patterns: {routing_result['detected_patterns']}")

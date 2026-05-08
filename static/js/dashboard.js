@@ -310,6 +310,7 @@ async function runSimulation() {
     const button = document.getElementById("run-simulation");
     const result = document.getElementById("simulation-result");
     const userInput = document.getElementById("userInput").value.trim();
+    const routeOverride = document.getElementById("routeOverride").value;
     const llmOutput = document.getElementById("llmOutput");
 
     if (!userInput) {
@@ -325,7 +326,7 @@ async function runSimulation() {
         const response = await fetch("/api/simulate-request", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user_input: userInput, llm_output: null }),
+            body: JSON.stringify({ user_input: userInput, llm_output: null, force_route: routeOverride }),
         });
         const payload = await response.json();
         if (!payload.success) {
