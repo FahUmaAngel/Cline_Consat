@@ -49,6 +49,8 @@ CONSAT_SENSITIVE_KEYWORDS = {
         "runbook secret",
         "deployment key",
         "vpn config",
+        "maintenance log",
+        "firmware updated",
     ],
     "consat_finance": [
         "invoice batch",
