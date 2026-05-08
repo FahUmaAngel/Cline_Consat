@@ -158,19 +158,15 @@
                             </button>
                         </div>
                         <label for="userInput">User input</label>
-                        <textarea id="userInput" rows="4">Create a FastAPI endpoint that reads users from a repository</textarea>
-                        <label for="llmOutput">LLM output</label>
-                        <textarea id="llmOutput" rows="5">from fastapi import APIRouter
-
-router = APIRouter()
-
-@router.get("/users")
-def list_users():
-    return {"users": []}</textarea>
-                        <button id="run-simulation" class="primary-button" type="button">
+                        <textarea id="userInput" rows="4">What is the standard bus route for line 172 in Stockholm?</textarea>
+                        
+                        <button id="run-simulation" class="primary-button" type="button" style="margin-top: 6px;">
                             <i class="fa-solid fa-play"></i> Run Simulation
                         </button>
                         <p id="simulation-result" class="result-line">Ready</p>
+                        
+                        <label>LLM output</label>
+                        <div id="llmOutput" style="min-height: 100px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #f8fafc; color: var(--ink); font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 13px; white-space: pre-wrap; word-break: break-word; overflow-y: auto; max-height: 250px;"></div>
                     </aside>
 
                     <div class="panel alerts-panel">
@@ -201,6 +197,6 @@ def list_users():
         </div>
     </div>
 
-    <script src="/static/js/dashboard.js"></script>
+    <script src="/static/js/dashboard.js?v=2"></script>
 </body>
 </html>
