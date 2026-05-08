@@ -22,6 +22,14 @@ Then visit `http://localhost:8000` in your browser.
 
 ---
 
+## Real LLM Integration (OpenRouter)
+
+The Web Dashboard uses the **OpenRouter API** to simulate the routing of prompts to different LLMs:
+- **Cloud LLM**: Uses `google/gemini-2.5-flash` to process safe, public-facing queries. The gateway automatically masks any PII before sending it.
+- **Local LLM**: Also uses `google/gemini-2.5-flash` (simulating a highly secure on-premise model). It receives the raw, unmasked data to handle highly sensitive company secrets.
+
+---
+
 ## Integrating with Cline (MCP Server)
 
 The project includes a ready-to-use **Model Context Protocol (MCP)** server (`mcp_server.py`). This allows Cline to directly query the Stockholm bus mock database while automatically applying the security policies.

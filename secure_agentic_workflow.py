@@ -9,7 +9,12 @@ Date: May 4, 2026
 
 import time
 import json
+import requests
+import os
+from dotenv import load_dotenv
 from typing import Dict, Optional
+
+load_dotenv()
 from sensitivity_router_prototype import SensitivityRouter
 from data_masking_prototype import DataMaskingPipeline
 from policy_enforcement_prototype import PolicyEnforcementPipeline
@@ -23,9 +28,12 @@ class SecureAgenticWorkflow:
     รวมทั้งหมด:
     - Task 4: Sensitivity Router
     - Task 5: Data Masking Engine
-    - Task 6: Policy Enforcement
     - Task 7: Monitoring Dashboard
     """
+    
+    OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+
     
     def __init__(self):
         """Initialize all components"""
@@ -34,6 +42,38 @@ class SecureAgenticWorkflow:
         self.policy = PolicyEnforcementPipeline()
         self.monitoring = MonitoringDashboard()
         self.request_history = []
+        
+    def _call_openrouter(self, prompt: str, is_local: bool) -> str:
+        """Calls OpenRouter API using Gemini models to generate real LLM response."""
+        model = "google/gemini-2.5-flash"
+        
+        print(f"      [API] Calling OpenRouter ({model})...")
+        try:
+            sys_msg = "You are a helpful data assistant for CONSAT. Keep responses concise and factual."
+            if is_local:
+                sys_msg = "You are a highly secure, private LOCAL AI model for CONSAT. You have access to raw sensitive data. Keep responses concise and factual."
+                
+            response = requests.post(
+                url="https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.OPENROUTER_API_KEY}",
+                    "HTTP-Referer": "http://localhost:8000",
+                    "X-Title": "CONSAT Secure AI Gateway",
+                },
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": sys_msg},
+                        {"role": "user", "content": prompt}
+                    ]
+                },
+                timeout=20
+            )
+            response.raise_for_status()
+            return response.json()['choices'][0]['message']['content'].strip()
+        except Exception as e:
+            print(f"      [API] Error calling OpenRouter: {e}")
+            return f"[Simulated Output due to API Error] Could not reach OpenRouter API: {e}"
     
     def process(self, user_input: str, llm_output: Optional[str] = None) -> Dict:
         """
@@ -79,13 +119,18 @@ class SecureAgenticWorkflow:
             
             llm_to_use = "cloud"
         
-        # ========== Step 4: LLM Processing (Simulated) ==========
+        # ========== Step 4: LLM Processing ==========
         print(f"\n[Step 4] 🤖 LLM Processing ({llm_to_use.upper()})...")
-        final_output = llm_output if llm_output else f"[Generated response based on input]"
+        if llm_output:
+            final_output = llm_output
+        else:
+            prompt_to_send = masked_input if not use_local else user_input
+            final_output = self._call_openrouter(prompt_to_send, use_local)
+            
         print(f"  └─ Output: {final_output[:60]}...")
         
         # ========== Step 5: De-masking (if Cloud) ==========
-        if not use_local and llm_output and masking_info:
+        if not use_local and final_output and masking_info:
             print(f"\n[Step 5] 🔓 De-masking...")
             final_output = self.masking.restore_output(final_output)
             print(f"  └─ Restored: {final_output[:60]}...")
