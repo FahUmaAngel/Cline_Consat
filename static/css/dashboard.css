@@ -632,6 +632,7 @@ textarea:focus {
 
 .history-approved { --accent: var(--green); }
 .history-rejected { --accent: var(--red); }
+.history-blocked  { --accent: #7c3aed; }
 
 .history-title {
     display: flex;
@@ -670,6 +671,11 @@ textarea:focus {
 .decision-rejected {
     background: #fff1f2;
     color: var(--red);
+}
+
+.decision-blocked {
+    background: #f5f3ff;
+    color: #7c3aed;
 }
 
 .history-item p {

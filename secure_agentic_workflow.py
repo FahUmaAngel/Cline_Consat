@@ -247,6 +247,8 @@ Answer the user's question using only the data above. Be concise and factual."""
             processing_time=processing_time,
             masked_items=masked_count,
             policy_violations=violation_count,
+            sensitivity_level=routing_result['sensitivity_level'],
+            force_overridden=force_overridden,
         )
         
         print(f"  ├─ Processing Time: {processing_time:.2f}ms")
@@ -255,11 +257,18 @@ Answer the user's question using only the data above. Be concise and factual."""
         print(f"  └─ Policy Violations: {violation_count}")
         
         force_overridden = (force_route in ("cloud", "local"))
-        
+
+        if not approved:
+            final_status = 'rejected'
+        elif use_local and not force_overridden:
+            final_status = 'blocked'
+        else:
+            final_status = 'approved'
+
         # ========== Final Result ==========
         result = {
             'request_id': f"req_{int(time.time() * 1000)}",
-            'status': 'approved' if approved else 'rejected',
+            'status': final_status,
             'force_overridden': force_overridden,
             'force_route': force_route if force_overridden else 'auto',
             'timestamp': time.time(),
@@ -286,8 +295,9 @@ Answer the user's question using only the data above. Be concise and factual."""
         # Store in history
         self.request_history.append(result)
         
+        status_icon = {"approved": "✅", "rejected": "❌", "blocked": "🔒"}.get(final_status, "ℹ️")
         print(f"\n{'='*80}")
-        print(f"✅ WORKFLOW COMPLETE - Status: {result['status'].upper()}")
+        print(f"{status_icon} WORKFLOW COMPLETE - Status: {result['status'].upper()}")
         print(f"{'='*80}\n")
         
         return result
@@ -303,6 +313,7 @@ Answer the user's question using only the data above. Be concise and factual."""
         
         approved_count = sum(1 for r in self.request_history if r['status'] == 'approved')
         rejected_count = sum(1 for r in self.request_history if r['status'] == 'rejected')
+        blocked_count  = sum(1 for r in self.request_history if r['status'] == 'blocked')
         local_count = sum(1 for r in self.request_history if r['routing']['llm_used'] == 'local')
         cloud_count = sum(1 for r in self.request_history if r['routing']['llm_used'] == 'cloud')
         
@@ -313,6 +324,7 @@ Answer the user's question using only the data above. Be concise and factual."""
             'total_requests': len(self.request_history),
             'approved': approved_count,
             'rejected': rejected_count,
+            'blocked': blocked_count,
             'approval_rate': f"{(approved_count / len(self.request_history) * 100):.1f}%" if self.request_history else "0%",
             'local_llm_used': local_count,
             'cloud_llm_used': cloud_count,

@@ -181,7 +181,7 @@ function updateDashboard(data) {
     healthEl.style.color = healthColor(healthStatus);
 
     setText("route-mix", `${workflow.local_llm_used || stats.local_routing_count || 0} local / ${workflow.cloud_llm_used || stats.cloud_routing_count || 0} cloud`);
-    setText("decision-mix", `${workflow.approved || 0} approved / ${workflow.rejected || 0} rejected`);
+    setText("decision-mix", `${workflow.approved || 0} approved / ${workflow.blocked || 0} blocked / ${workflow.rejected || 0} rejected`);
     setText("masked-count", `${stats.total_masking_items || 0} masked items`);
     setText("masked-total", stats.total_masking_items || 0);
     setText("alert-count", `${stats.total_alerts || alerts.length || 0} active alerts`);

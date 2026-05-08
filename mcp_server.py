@@ -15,18 +15,30 @@ import json
 import sys
 import traceback
 
-from data_masking_prototype import DataMaskingPipeline
-from policy_enforcement_prototype import PolicyEnforcementPipeline
-from secure_agentic_workflow import SecureAgenticWorkflow
-from sensitivity_router_prototype import SensitivityRouter
-import stockholm_bus_data as bus_db
-import data_policy
+_router = None
+_masking = None
+_policy = None
+_workflow = None
+_bus_db = None
+_data_policy = None
 
 
-router = SensitivityRouter()
-masking = DataMaskingPipeline()
-policy = PolicyEnforcementPipeline()
-workflow = SecureAgenticWorkflow()
+def _get_components():
+    global _router, _masking, _policy, _workflow, _bus_db, _data_policy
+    if _workflow is None:
+        from data_masking_prototype import DataMaskingPipeline
+        from policy_enforcement_prototype import PolicyEnforcementPipeline
+        from secure_agentic_workflow import SecureAgenticWorkflow
+        from sensitivity_router_prototype import SensitivityRouter
+        import stockholm_bus_data as bus_db_mod
+        import data_policy as data_policy_mod
+        _router = SensitivityRouter()
+        _masking = DataMaskingPipeline()
+        _policy = PolicyEnforcementPipeline()
+        _workflow = SecureAgenticWorkflow()
+        _bus_db = bus_db_mod
+        _data_policy = data_policy_mod
+    return _router, _masking, _policy, _workflow, _bus_db, _data_policy
 
 
 TOOLS = [
@@ -132,10 +144,12 @@ def _content(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def consat_route(args: Dict[str, Any]) -> Dict[str, Any]:
+    router, _, _, _, _, _ = _get_components()
     return _content(router.route(args["text"]))
 
 
 def consat_mask(args: Dict[str, Any]) -> Dict[str, Any]:
+    _, masking, _, _, _, _ = _get_components()
     masked_text, metadata = masking.process_for_cloud(args["text"])
     return _content(
         {
@@ -147,6 +161,7 @@ def consat_mask(args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def consat_policy_check(args: Dict[str, Any]) -> Dict[str, Any]:
+    _, _, policy, _, _, _ = _get_components()
     return _content(
         {
             "result": policy.validate_ai_output(args["code"]),
@@ -156,6 +171,7 @@ def consat_policy_check(args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def consat_workflow_process(args: Dict[str, Any]) -> Dict[str, Any]:
+    _, _, _, workflow, _, _ = _get_components()
     log_buffer = io.StringIO()
     with redirect_stdout(log_buffer):
         result = workflow.process(args["user_input"], args.get("llm_output"))
@@ -172,6 +188,7 @@ def consat_workflow_process(args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def consat_metrics(args: Dict[str, Any]) -> Dict[str, Any]:
+    _, _, _, workflow, _, _ = _get_components()
     return _content(
         {
             "workflow_stats": workflow.get_stats(),
@@ -183,12 +200,10 @@ def consat_metrics(args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def consat_bus_query(args: Dict[str, Any]) -> Dict[str, Any]:
+    _, _, _, _, bus_db, data_policy = _get_components()
     query = args["query"]
-    # Classify the query first
     classification = data_policy.classify_query(query)
-    # Search the database
     raw_results = bus_db.search_data(query)
-    # Apply policy filtering for external sharing
     filtered = {}
     table_map = {
         "routes": "bus_routes",
@@ -209,6 +224,7 @@ def consat_bus_query(args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def consat_driver_lookup(args: Dict[str, Any]) -> Dict[str, Any]:
+    _, _, _, _, bus_db, data_policy = _get_components()
     driver_id = args["driver_id"]
     matches = [d for d in bus_db.DRIVERS if d["driver_id"] == driver_id]
     if not matches:
@@ -226,6 +242,7 @@ def consat_driver_lookup(args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def consat_data_policy(args: Dict[str, Any]) -> Dict[str, Any]:
+    _, _, _, _, _, data_policy = _get_components()
     result = {}
     table = args.get("table")
     query = args.get("query")

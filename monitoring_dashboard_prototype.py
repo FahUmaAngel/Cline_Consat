@@ -86,13 +86,13 @@ class MetricsCollector:
                     threshold=self.alert_thresholds['processing_time_ms'],
                 )
         elif metric_type == MetricType.POLICY_VIOLATIONS:
-            if value > self.alert_thresholds['policy_violation_rate']:
+            if value > 0:
                 self._create_alert(
                     severity='critical',
-                    message=f'High policy violation rate: {value}%',
+                    message=f'Policy violation detected: {int(value)} critical violation(s)',
                     metric_type=metric_type.value,
                     value=value,
-                    threshold=self.alert_thresholds['policy_violation_rate'],
+                    threshold=0,
                 )
     
     def _create_alert(self, severity: str, message: str, metric_type: str, 
@@ -191,8 +191,9 @@ class MonitoringDashboard:
         self.metrics_collector = MetricsCollector()
         self.calculator = DashboardCalculator(self.metrics_collector)
     
-    def record_request(self, routing_decision: str, processing_time: float, 
-                       masked_items: int = 0, policy_violations: int = 0):
+    def record_request(self, routing_decision: str, processing_time: float,
+                       masked_items: int = 0, policy_violations: int = 0,
+                       sensitivity_level: str = '', force_overridden: bool = False):
         """บันทึก request processing"""
         self.metrics_collector.record_metric(
             MetricType.REQUEST_COUNT, 1
@@ -218,7 +219,16 @@ class MonitoringDashboard:
             self.metrics_collector.record_metric(
                 MetricType.POLICY_VIOLATIONS, policy_violations
             )
-        
+
+        if routing_decision == 'local' and sensitivity_level == 'high' and not force_overridden:
+            self.metrics_collector._create_alert(
+                severity='critical',
+                message='HIGH sensitivity data blocked — routed to Local LLM only',
+                metric_type='sensitivity_block',
+                value=1,
+                threshold=0,
+            )
+
         self.metrics_collector.record_metric(
             MetricType.PROCESSING_TIME, processing_time
         )
