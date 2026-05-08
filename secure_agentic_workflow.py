@@ -86,14 +86,18 @@ class SecureAgenticWorkflow:
     
     def _call_openrouter(self, prompt: str, is_local: bool) -> str:
         """Calls OpenRouter API using Gemini models to generate real LLM response."""
+        if not self.OPENROUTER_API_KEY:
+            label = "LOCAL" if is_local else "CLOUD"
+            print(f"      [API] No API key — returning simulated {label} response.")
+            return self._simulated_response(prompt, is_local)
+
         model = "google/gemini-2.5-flash"
-        
         print(f"      [API] Calling OpenRouter ({model})...")
         try:
             sys_msg = "You are a helpful data assistant for CONSAT. Keep responses concise and factual."
             if is_local:
                 sys_msg = "You are a highly secure, private LOCAL AI model for CONSAT. You have access to raw sensitive data. Keep responses concise and factual."
-                
+
             response = requests.post(
                 url="https://openrouter.ai/api/v1/chat/completions",
                 headers={
@@ -108,13 +112,28 @@ class SecureAgenticWorkflow:
                         {"role": "user", "content": prompt}
                     ]
                 },
-                timeout=20
+                timeout=10,
             )
             response.raise_for_status()
             return response.json()['choices'][0]['message']['content'].strip()
         except Exception as e:
             print(f"      [API] Error calling OpenRouter: {e}")
-            return f"[Simulated Output due to API Error] Could not reach OpenRouter API: {e}"
+            return self._simulated_response(prompt, is_local)
+
+    def _simulated_response(self, prompt: str, is_local: bool) -> str:
+        """Return a realistic-looking simulated LLM response for demo purposes."""
+        label = "Local LLM" if is_local else "Cloud LLM"
+        keyword = prompt[:80].strip()
+        return (
+            f"[{label} — Simulated]\n\n"
+            f"Based on the CONSAT database, here is the analysis for your query:\n"
+            f'"{keyword}..."\n\n'
+            "Key findings:\n"
+            "• Route 172 operates Norsborg ↔ Skarpnäck (42 stops, every 10 min)\n"
+            "• Vehicle fleet: 16 buses, avg eco-drive score 84.2\n"
+            "• No critical incidents in the last 30 days\n\n"
+            "Note: This is a simulated response. Set OPENROUTER_API_KEY for live LLM output."
+        )
     
     def process(self, user_input: str, llm_output: Optional[str] = None, force_route: str = "auto") -> Dict:
         """
@@ -241,7 +260,8 @@ Answer the user's question using only the data above. Be concise and factual."""
             masked_count = sum(len(v) for v in masking_info['masked_items'].values())
         
         violation_count = policy_result['critical_violations']
-        
+        force_overridden = (force_route in ("cloud", "local"))
+
         self.monitoring.record_request(
             routing_decision="local" if use_local else "cloud",
             processing_time=processing_time,
@@ -250,13 +270,11 @@ Answer the user's question using only the data above. Be concise and factual."""
             sensitivity_level=routing_result['sensitivity_level'],
             force_overridden=force_overridden,
         )
-        
+
         print(f"  ├─ Processing Time: {processing_time:.2f}ms")
         print(f"  ├─ Route: {'LOCAL' if use_local else 'CLOUD'}")
         print(f"  ├─ Masked Items: {masked_count}")
         print(f"  └─ Policy Violations: {violation_count}")
-        
-        force_overridden = (force_route in ("cloud", "local"))
 
         if not approved:
             final_status = 'rejected'

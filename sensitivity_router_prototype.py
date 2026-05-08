@@ -141,11 +141,16 @@ class SensitivityDetector:
             internal_count = sum(1 for p in detected_patterns if p.startswith("INTERNAL"))
             keyword_count = sum(1 for p in detected_patterns if p.startswith("KEYWORD"))
             
-            high_risk_keywords = any(p in ["KEYWORD:consat_eco_drive", "KEYWORD:consat_iot_internal", "KEYWORD:consat_operations", "KEYWORD:consat_finance"] for p in detected_patterns)
-            
-            if secret_count > 0 or internal_count > 0 or high_risk_keywords:
+            high_risk_keywords = any(p in [
+                "KEYWORD:consat_eco_drive", "KEYWORD:consat_iot_internal",
+                "KEYWORD:consat_operations", "KEYWORD:consat_finance",
+                "KEYWORD:consat_driver_pii",   # driver PII field names → HIGH
+                "KEYWORD:salary_info",          # salary/compensation → HIGH
+            ] for p in detected_patterns)
+
+            if secret_count > 0 or internal_count > 0 or pii_count > 0 or high_risk_keywords:
                 return SensitivityLevel.HIGH, detected_patterns
-            elif pii_count > 0 or keyword_count > 0:
+            elif keyword_count > 0:
                 return SensitivityLevel.MEDIUM, detected_patterns
             else:
                 return SensitivityLevel.LOW, detected_patterns

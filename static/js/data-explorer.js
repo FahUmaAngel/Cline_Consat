@@ -133,10 +133,14 @@
             const data = await res.json();
             const policies = data.policies || {};
             const tables = [
-                { key: "bus_routes", icon: "fa-route", label: "Bus Routes" },
-                { key: "bus_vehicles", icon: "fa-bus", label: "Vehicles" },
-                { key: "drivers", icon: "fa-id-card", label: "Drivers" },
-                { key: "iot_sensor_readings", icon: "fa-satellite-dish", label: "IoT Readings" },
+                { key: "bus_routes",          icon: "fa-route",                  label: "Bus Routes" },
+                { key: "bus_vehicles",         icon: "fa-bus",                    label: "Vehicles" },
+                { key: "drivers",              icon: "fa-id-card",                label: "Drivers" },
+                { key: "iot_sensor_readings",  icon: "fa-satellite-dish",         label: "IoT Readings" },
+                { key: "bus_stops",            icon: "fa-map-pin",                label: "Bus Stops" },
+                { key: "maintenance_logs",     icon: "fa-wrench",                 label: "Maintenance" },
+                { key: "driver_shifts",        icon: "fa-calendar-days",          label: "Shifts" },
+                { key: "incidents",            icon: "fa-triangle-exclamation",   label: "Incidents" },
             ];
 
             for (const t of tables) {

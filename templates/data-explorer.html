@@ -5,10 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CONSAT Data Explorer — Policy Visualization</title>
     <meta name="description" content="Explore Stockholm bus IoT data with per-column data classification policy badges showing PUBLIC, PII, and COMPANY_SECRET fields.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link href="/static/css/dashboard.css" rel="stylesheet">
-    <link href="/static/css/data-explorer.css" rel="stylesheet">
+    <link href="/static/css/data-explorer.css?v=2" rel="stylesheet">
 </head>
 <body>
     <div class="app-frame">
@@ -78,6 +80,34 @@
                         </div>
                         <div class="field-counts">Loading...</div>
                     </article>
+                    <article id="card-bus_stops" class="summary-card" data-table="bus_stops">
+                        <div class="card-title">
+                            <i class="fa-solid fa-map-pin"></i>
+                            <span>Bus Stops</span>
+                        </div>
+                        <div class="field-counts">Loading...</div>
+                    </article>
+                    <article id="card-maintenance_logs" class="summary-card" data-table="maintenance_logs">
+                        <div class="card-title">
+                            <i class="fa-solid fa-wrench"></i>
+                            <span>Maintenance</span>
+                        </div>
+                        <div class="field-counts">Loading...</div>
+                    </article>
+                    <article id="card-driver_shifts" class="summary-card" data-table="driver_shifts">
+                        <div class="card-title">
+                            <i class="fa-solid fa-calendar-days"></i>
+                            <span>Shifts</span>
+                        </div>
+                        <div class="field-counts">Loading...</div>
+                    </article>
+                    <article id="card-incidents" class="summary-card" data-table="incidents">
+                        <div class="card-title">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <span>Incidents</span>
+                        </div>
+                        <div class="field-counts">Loading...</div>
+                    </article>
                 </section>
 
                 <!-- View Toggle -->
@@ -91,7 +121,7 @@
                             <i class="fa-solid fa-handshake"></i> External Partner
                         </span>
                     </div>
-                    <div style="display:flex;align-items:center;gap:12px;color:#64748b;font-size:13px;font-weight:800;">
+                    <div class="policy-legend">
                         <span><i class="fa-solid fa-lock-open" style="color:#16a34a"></i> PUBLIC — pass</span>
                         <span><i class="fa-solid fa-user-shield" style="color:#d97706"></i> PII — hash/encrypt</span>
                         <span><i class="fa-solid fa-ban" style="color:#dc2626"></i> SECRET — redact</span>
@@ -116,7 +146,7 @@
                 <section class="classifier-panel" aria-label="Query classifier">
                     <div class="classifier-input-area">
                         <h3><i class="fa-solid fa-magnifying-glass-chart"></i> Query Classifier</h3>
-                        <p style="color:#64748b;font-size:13px;margin:0 0 12px;">Type a query to see how it's classified by the data policy engine.</p>
+                        <p class="classifier-help">Type a query to see how it's classified by the data policy engine.</p>
                         <div class="query-input-row">
                             <input id="query-input" type="text" placeholder='Try: "Show eco-drive scores for all drivers"' />
                             <button id="classify-btn" class="classify-btn" type="button">

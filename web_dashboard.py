@@ -118,10 +118,14 @@ async def get_data_explorer(request: Request):
 async def get_bus_data(table: str = "bus_routes", view: str = "internal"):
     """Get bus data with optional policy filtering."""
     table_data_map = {
-        "bus_routes": bus_db.BUS_ROUTES,
-        "bus_vehicles": bus_db.BUS_VEHICLES,
-        "drivers": bus_db.DRIVERS,
+        "bus_routes":         bus_db.BUS_ROUTES,
+        "bus_vehicles":       bus_db.BUS_VEHICLES,
+        "drivers":            bus_db.DRIVERS,
         "iot_sensor_readings": bus_db.IOT_SENSOR_READINGS,
+        "bus_stops":          bus_db.BUS_STOPS,
+        "maintenance_logs":   bus_db.MAINTENANCE_LOGS,
+        "driver_shifts":      bus_db.DRIVER_SHIFTS,
+        "incidents":          bus_db.INCIDENTS,
     }
     raw = table_data_map.get(table, [])
     if not raw:
@@ -195,8 +199,12 @@ async def simulate_request(request_data: dict):
         force_route = request_data.get("force_route", "auto")
 
         log_buffer = io.StringIO()
-        with redirect_stdout(log_buffer):
-            result = workflow.process(user_input, llm_output, force_route=force_route)
+
+        def _run():
+            with redirect_stdout(log_buffer):
+                return workflow.process(user_input, llm_output, force_route=force_route)
+
+        result = await asyncio.to_thread(_run)
         result["user_input"] = user_input
 
         return {
