@@ -25,6 +25,9 @@ CONSAT_SECRET_PATTERNS = {
     # Stockholm bus domain secrets
     "consat_iot_device_id": r"\bCONSAT-IOT-\d{4,6}\b",
     "consat_certification": r"\bCONSAT-CERT-(?:ADV|STD|ELITE)\b",
+    # Incident ID — any query referencing a specific incident may access the
+    # COMPANY_SECRET description field, so treat all incident ID lookups as HIGH.
+    "consat_incident_id": r"\bINC-\d{4}-\d{3,6}\b",
 }
 
 CONSAT_INTERNAL_PATTERNS = {
@@ -51,6 +54,19 @@ CONSAT_SENSITIVE_KEYWORDS = {
         "vpn config",
         "maintenance log",
         "firmware updated",
+        # Stockholm bus maintenance secrets
+        "cost_sek",
+        "maintenance cost",
+        "parts_replaced",
+        "parts replaced",
+        "internal_notes",
+        "internal notes",
+        # HR/operational secrets
+        "overtime_hours",
+        "overtime",
+        # incident sensitive content
+        "incident description",
+        "incident details",
     ],
     "consat_finance": [
         "invoice batch",
@@ -69,6 +85,13 @@ CONSAT_SENSITIVE_KEYWORDS = {
         "brake wear",
         "engine_temp",
         "engine temperature",
+        # vehicle telemetry secrets
+        "battery_level",
+        "battery level",
+        "battery_level_pct",
+        "tire_pressure",
+        "tire pressure",
+        "tire_pressure_bar",
     ],
     "consat_iot_internal": [
         "iot_device_id",
@@ -87,6 +110,27 @@ CONSAT_SENSITIVE_KEYWORDS = {
         "driver phone",
         "driver email",
         "registration_plate",
+        "registration plate",
+        # maintenance staff identifiers (PII)
+        "technician_id",
+        "technician_name",
+        # contact info plain variants
+        "phone",
+        "email",
+        # driver linkage (driver_id in sensor/shift/incident context = personal data)
+        "driver_id",
+        "driver id",
+        # GPS location of driver or vehicle = PII under GDPR (links individual to position)
+        "latitude",
+        "longitude",
+        "gps",
+        "coordinates",
+        "location of driver",
+        "driver location",
+        "vehicle location",
+        # break/movement tracking
+        "break_location",
+        "break location",
     ],
 }
 

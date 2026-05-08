@@ -861,3 +861,20 @@ select:focus {
     .history-item { display: block; }
     .history-meta { margin-top: 8px; text-align: left; }
 }
+
+/* ---- Workflow Log ---- */
+.workflow-log {
+    margin: 8px 0 0;
+    padding: 10px 12px;
+    background: #0f172a;
+    border-radius: 8px;
+    border: 1px solid #1e293b;
+    color: #94a3b8;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.6;
+    white-space: pre;
+    overflow-x: auto;
+    max-height: 260px;
+    overflow-y: auto;
+}

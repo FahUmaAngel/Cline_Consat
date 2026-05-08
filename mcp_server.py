@@ -8,11 +8,24 @@ Cline command:
     python D:\\Hackathon\\Cline_Consat\\mcp_server.py
 """
 
+import sys
+import os
+
+# CRITICAL: Save the raw JSON-RPC pipe and redirect ALL print() to stderr.
+# Any stray print() that reaches sys.stdout corrupts the Content-Length framing
+# and causes Cline to see -32001 timeouts.
+_json_rpc_out = sys.stdout.buffer
+sys.stdout = sys.stderr
+
+# Ensure project modules are importable regardless of CWD
+_PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _PROJECT_DIR not in sys.path:
+    sys.path.insert(0, _PROJECT_DIR)
+
 from contextlib import redirect_stdout
 from typing import Any, Callable, Dict
 import io
 import json
-import sys
 import traceback
 
 _router = None
@@ -281,8 +294,9 @@ def read_message() -> Dict[str, Any] | None:
         line = line.decode("utf-8").strip()
         if not line:
             break
-        key, value = line.split(":", 1)
-        headers[key.lower()] = value.strip()
+        if ":" in line:
+            key, value = line.split(":", 1)
+            headers[key.lower()] = value.strip()
 
     content_length = int(headers.get("content-length", "0"))
     if content_length <= 0:
@@ -293,9 +307,9 @@ def read_message() -> Dict[str, Any] | None:
 
 def send_message(message: Dict[str, Any]) -> None:
     body = json.dumps(message, ensure_ascii=False).encode("utf-8")
-    sys.stdout.buffer.write(f"Content-Length: {len(body)}\r\n\r\n".encode("ascii"))
-    sys.stdout.buffer.write(body)
-    sys.stdout.buffer.flush()
+    _json_rpc_out.write(f"Content-Length: {len(body)}\r\n\r\n".encode("ascii"))
+    _json_rpc_out.write(body)
+    _json_rpc_out.flush()
 
 
 def success(request_id: Any, result: Dict[str, Any]) -> Dict[str, Any]:

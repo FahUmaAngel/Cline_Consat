@@ -9,7 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="/static/css/dashboard.css?v=2" rel="stylesheet">
+    <link href="/static/css/dashboard.css?v=3" rel="stylesheet">
 </head>
 <body>
     <div class="app-frame">
@@ -177,6 +177,13 @@
                         
                         <label>LLM output</label>
                         <div id="llmOutput"></div>
+
+                        <details id="log-details" style="display:none;margin-top:12px;">
+                            <summary style="font-size:12px;font-weight:700;color:#64748b;cursor:pointer;user-select:none;">
+                                <i class="fa-solid fa-terminal" style="margin-right:4px;"></i> Workflow log
+                            </summary>
+                            <pre id="workflowLog" class="workflow-log"></pre>
+                        </details>
                     </aside>
 
                     <div class="panel alerts-panel">
@@ -207,6 +214,6 @@
         </div>
     </div>
 
-    <script src="/static/js/dashboard.js?v=2"></script>
+    <script src="/static/js/dashboard.js?v=3"></script>
 </body>
 </html>

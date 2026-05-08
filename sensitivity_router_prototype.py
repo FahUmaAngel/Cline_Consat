@@ -9,6 +9,7 @@ Date: May 4, 2026
 
 import re
 import json
+import importlib
 from enum import Enum
 from typing import Dict, List, Tuple
 from dataclasses import dataclass, asdict
@@ -86,8 +87,27 @@ class SensitivityDetector:
             'security_info': ['vulnerability', 'exploit', 'backdoor', 'zero-day'],
             'business_secret': ['trade_secret', 'proprietary', 'confidential', 'restricted'],
         }
-        for category, keywords in CONSAT_SENSITIVE_KEYWORDS.items():
-            self.sensitive_keywords.setdefault(category, []).extend(keywords)
+        self._refresh_sensitive_keywords()
+
+    def _refresh_sensitive_keywords(self) -> None:
+        """
+        Refresh keyword lists from consat_rules at runtime.
+
+        Some dev servers can keep module state in memory even after file edits.
+        Reloading keeps routing behavior aligned with the latest rule set.
+        """
+        try:
+            import consat_rules as _rules
+            importlib.reload(_rules)
+            latest = getattr(_rules, "CONSAT_SENSITIVE_KEYWORDS", {})
+        except Exception:
+            latest = CONSAT_SENSITIVE_KEYWORDS
+
+        for category, keywords in latest.items():
+            self.sensitive_keywords.setdefault(category, [])
+            for kw in keywords:
+                if kw not in self.sensitive_keywords[category]:
+                    self.sensitive_keywords[category].append(kw)
     
     def detect_pii(self, text: str) -> List[str]:
         """ตรวจจับข้อมูลส่วนบุคคล (PII)"""
@@ -116,6 +136,7 @@ class SensitivityDetector:
     def detect_sensitive_keywords(self, text: str) -> List[str]:
         """ตรวจจับคำสำคัญที่มีความสำคัญ"""
         found = []
+        self._refresh_sensitive_keywords()
         text_lower = text.lower()
         for category, keywords in self.sensitive_keywords.items():
             for keyword in keywords:

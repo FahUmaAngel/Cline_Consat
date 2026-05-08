@@ -176,12 +176,19 @@ class SecureAgenticWorkflow:
         
         # ========== Step 2: Route Decision ==========
         if use_local:
-            print(f"\n[Step 2] 📍 Routing Decision: LOCAL LLM (High Security)")
+            print(f"\n{'═'*60}")
+            print(f"  🔒 ROUTING TO PRIVATE CLOUD  (On-Premise Secure LLM)")
+            print(f"     ⚠  HIGH sensitivity data detected")
+            print(f"     ⛔ Blocking public internet access — local only")
+            print(f"{'═'*60}")
             masked_input = user_input
             masking_info = None
             llm_to_use = "local"
         else:
-            print(f"\n[Step 2] 📍 Routing Decision: CLOUD LLM (Fast)")
+            print(f"\n{'═'*60}")
+            print(f"  ☁️  ROUTING TO PUBLIC CLOUD   (Gemini Flash)")
+            print(f"     ✅ Safe to route — no sensitive data detected")
+            print(f"{'═'*60}")
             
             # ========== Step 3: Data Masking ==========
             print(f"\n[Step 3] 🔒 Data Masking...")
@@ -286,6 +293,7 @@ Answer the user's question using only the data above. Be concise and factual."""
         # ========== Final Result ==========
         result = {
             'request_id': f"req_{int(time.time() * 1000)}",
+            'user_input': user_input,
             'status': final_status,
             'force_overridden': force_overridden,
             'force_route': force_route if force_overridden else 'auto',
@@ -295,6 +303,7 @@ Answer the user's question using only the data above. Be concise and factual."""
                 'reason': routing_result['reason'],
                 'llm_used': llm_to_use,
                 'sensitivity_level': routing_result['sensitivity_level'],
+                'detected_patterns': routing_result.get('detected_patterns', []),
             },
             'masking': masking_info,
             'policy_check': {
