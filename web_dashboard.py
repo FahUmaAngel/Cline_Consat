@@ -75,6 +75,8 @@ def _serialize_history(limit: int = 20):
         row["processing_time_ms"] = item.get("metrics", {}).get("processing_time_ms", "0")
         row["masked_items_count"] = item.get("metrics", {}).get("masked_items_count", 0)
         row["critical_violations"] = item.get("policy_check", {}).get("critical_violations", 0)
+        row["force_overridden"] = item.get("force_overridden", False)
+        row["force_route"] = item.get("force_route", "auto")
         serialized.append(row)
     return serialized
 

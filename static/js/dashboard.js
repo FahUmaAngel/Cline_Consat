@@ -279,6 +279,7 @@ function updateHistory(history) {
     }
 
     panel.className = "scroll-region";
+    panel.className = "scroll-region";
     panel.innerHTML = history.slice().reverse().map((request) => {
         const route = request.route || request.routing?.llm_used || "unknown";
         const status = request.status || "unknown";
@@ -286,15 +287,26 @@ function updateHistory(history) {
         const duration = request.processing_time_ms || request.metrics?.processing_time_ms || "0";
         const masked = request.masked_items_count ?? request.metrics?.masked_items_count ?? 0;
         const input = request.input_preview || request.user_input || request.routing?.reason || "Workflow request";
+        const forceOverridden = request.force_overridden || false;
+        
+        const overrideBadge = forceOverridden
+            ? `<span class="decision-badge" style="background:#f59e0b;color:#fff;">⚡ OVERRIDE</span>`
+            : `<span class="decision-badge decision-${escapeHtml(status)}">${escapeHtml(status).toUpperCase()}</span>`;
+        
+        const overrideWarning = (forceOverridden && sensitivity === "high")
+            ? `<p style="color:#f59e0b;font-size:11px;margin:2px 0 0 0;">⚠️ Manually overridden — data was masked before cloud routing</p>`
+            : "";
+        
         return `
             <article class="history-item history-${escapeHtml(status)}">
                 <div>
                     <div class="history-title">
                         <span class="route-badge route-${escapeHtml(route)}">${escapeHtml(route).toUpperCase()} LLM</span>
-                        <span class="decision-badge decision-${escapeHtml(status)}">${escapeHtml(status).toUpperCase()}</span>
+                        ${overrideBadge}
                         <strong>${escapeHtml(sensitivity).toUpperCase()} sensitivity</strong>
                     </div>
                     <p>${escapeHtml(input)}</p>
+                    ${overrideWarning}
                 </div>
                 <div class="history-meta">
                     <div>${Number.parseFloat(duration).toFixed(2)}ms</div>

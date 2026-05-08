@@ -15,10 +15,12 @@ from dotenv import load_dotenv
 from typing import Dict, Optional
 
 load_dotenv()
-from sensitivity_router_prototype import SensitivityRouter
+from sensitivity_router_prototype import SensitivityRouter, SensitivityLevel
 from data_masking_prototype import DataMaskingPipeline
 from policy_enforcement_prototype import PolicyEnforcementPipeline
 from monitoring_dashboard_prototype import MonitoringDashboard
+import stockholm_bus_data as bus_db
+import json
 
 
 class SecureAgenticWorkflow:
@@ -43,6 +45,45 @@ class SecureAgenticWorkflow:
         self.monitoring = MonitoringDashboard()
         self.request_history = []
         
+    def _fetch_context(self, user_input: str) -> str:
+        """Query the real stockholm_bus_data database and return relevant data as context."""
+        try:
+            text = user_input.lower()
+            
+            # Specific vehicle lookup
+            for v in bus_db.BUS_VEHICLES:
+                if v["vehicle_id"].lower() in text:
+                    drivers = bus_db.get_drivers(v["vehicle_id"])
+                    readings = bus_db.get_sensor_readings(vehicle_id=v["vehicle_id"])
+                    return json.dumps({
+                        "vehicle": v,
+                        "drivers": drivers,
+                        "recent_sensor_readings": readings[:3]
+                    }, indent=2)
+            
+            # Specific driver lookup
+            for d in bus_db.DRIVERS:
+                if d["driver_id"].lower() in text:
+                    readings = bus_db.get_sensor_readings()
+                    driver_readings = [r for r in readings if r["driver_id"] == d["driver_id"]]
+                    return json.dumps({"driver": d, "sensor_readings": driver_readings[:3]}, indent=2)
+            
+            # Line number lookup
+            for route in bus_db.BUS_ROUTES:
+                if str(route["line_number"]) in text or route["line_name"].lower() in text:
+                    vehicles = bus_db.get_vehicles(route["route_id"])
+                    return json.dumps({"route": route, "vehicles": vehicles}, indent=2)
+            
+            # General search fallback
+            results = bus_db.search_data(user_input)
+            return json.dumps({
+                "routes": results["routes"][:2],
+                "vehicles": results["vehicles"][:2],
+                "drivers": [{k: v for k, v in d.items() if k not in ("personal_number", "phone", "email")} for d in results["drivers"][:2]],
+            }, indent=2)
+        except Exception as e:
+            return f"[DB Error: {e}]"
+    
     def _call_openrouter(self, prompt: str, is_local: bool) -> str:
         """Calls OpenRouter API using Gemini models to generate real LLM response."""
         model = "google/gemini-2.5-flash"
@@ -99,12 +140,10 @@ class SecureAgenticWorkflow:
         routing_result = self.router.route(user_input)
         
         if force_route == "cloud":
+            use_local = False
             if routing_result['sensitivity_level'] == SensitivityLevel.HIGH.value:
-                print(f"  ❌ SECURITY BLOCK: Cannot force HIGH sensitivity data to CLOUD")
-                use_local = True
-                routing_result['reason'] = "Override BLOCKED (High Sensitivity Forced Local)"
+                routing_result['reason'] = "Manual Override (Cloud) ⚠️ HIGH sensitivity – Data will be masked before sending"
             else:
-                use_local = False
                 routing_result['reason'] = "Manual Override (Cloud)"
         elif force_route == "local":
             use_local = True
@@ -139,8 +178,38 @@ class SecureAgenticWorkflow:
         if llm_output:
             final_output = llm_output
         else:
-            prompt_to_send = masked_input if not use_local else user_input
-            final_output = self._call_openrouter(prompt_to_send, use_local)
+            # Fetch real data context from the database
+            print(f"      [DB] Fetching real context from stockholm_bus_data...")
+            db_context = self._fetch_context(user_input)
+            
+            if use_local:
+                # Local LLM: receives raw real data (no masking)
+                enriched_prompt = f"""The user asked: \"{user_input}\"
+
+Here is the real data from the CONSAT database:
+{db_context}
+
+Answer the user's question using only the data above. Be concise and factual."""
+            else:
+                # Cloud LLM: receives already-masked prompt text + masked real data
+                masked_context, db_masking_info = self.masking.process_for_cloud(db_context)
+                # Merge db masking counts into masking_info so they're tracked
+                if masking_info and db_masking_info:
+                    for k, v in db_masking_info['masked_items'].items():
+                        if k in masking_info['masked_items']:
+                            masking_info['masked_items'][k].extend(v)
+                        else:
+                            masking_info['masked_items'][k] = v
+                elif db_masking_info:
+                    masking_info = db_masking_info
+                enriched_prompt = f"""The user asked: \"{masked_input}\"
+
+Here is the relevant data from the CONSAT database (PII has been masked):
+{masked_context}
+
+Answer the user's question using only the data above. Be concise and factual."""
+            
+            final_output = self._call_openrouter(enriched_prompt, use_local)
             
         print(f"  └─ Output: {final_output[:60]}...")
         
@@ -185,10 +254,14 @@ class SecureAgenticWorkflow:
         print(f"  ├─ Masked Items: {masked_count}")
         print(f"  └─ Policy Violations: {violation_count}")
         
+        force_overridden = (force_route in ("cloud", "local"))
+        
         # ========== Final Result ==========
         result = {
             'request_id': f"req_{int(time.time() * 1000)}",
             'status': 'approved' if approved else 'rejected',
+            'force_overridden': force_overridden,
+            'force_route': force_route if force_overridden else 'auto',
             'timestamp': time.time(),
             'routing': {
                 'decision': routing_result['routing_decision'],
