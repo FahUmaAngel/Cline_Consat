@@ -14,5 +14,37 @@
     "storage_path": "secret\\VF-F49902271267_confidential_fleet_budget_2026.csv",
     "download_count": 0,
     "starred": false
+  },
+  {
+    "file_id": "VF-B69A7132452B",
+    "filename": "public_passenger_information_guide.docx",
+    "tier": "PUBLIC",
+    "size_bytes": 37344,
+    "sha256": "b0a752f17d57e1afe4dbc437c56493673585fafd746bb0b50b16a26be0d3b552",
+    "extension": ".docx",
+    "mime_guess": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "tags": [],
+    "description": "",
+    "uploaded_at": "2026-05-09T12:58:49.832966Z",
+    "updated_at": "2026-05-09T12:58:49.832966Z",
+    "storage_path": "public\\VF-B69A7132452B_public_passenger_information_guide.docx",
+    "download_count": 0,
+    "starred": false
+  },
+  {
+    "file_id": "VF-4C3DC2D02EFA",
+    "filename": "driver_contact_list_stockholm.csv",
+    "tier": "PII",
+    "size_bytes": 447,
+    "sha256": "f516f11efdf98dfd49eb96f55306da96309ef7c7fa2b4ae7c9139062b16278ea",
+    "extension": ".csv",
+    "mime_guess": "text/csv",
+    "tags": [],
+    "description": "",
+    "uploaded_at": "2026-05-09T12:59:29.960862Z",
+    "updated_at": "2026-05-09T12:59:29.960862Z",
+    "storage_path": "pii\\VF-4C3DC2D02EFA_driver_contact_list_stockholm.csv",
+    "download_count": 0,
+    "starred": false
   }
 ]

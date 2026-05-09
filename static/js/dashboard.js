@@ -361,6 +361,26 @@ function updateAlerts(alerts, history) {
                 metric_type: "manual_override",
             });
         }
+
+        // HIGH sensitivity blocked to LOCAL (guardrail working correctly)
+        if (sensitivity === "high" && route === "local" && !forceOverridden) {
+            combined.push({
+                severity: "warning",
+                message: `🔒 HIGH sensitivity request secured on LOCAL LLM — blocked from cloud routing. Input: "${inputPreview}..."`,
+                timestamp: req.timestamp,
+                metric_type: "high_sensitivity_blocked",
+            });
+        }
+
+        // MEDIUM sensitivity masked before cloud
+        if (sensitivity === "medium" && route === "cloud") {
+            combined.push({
+                severity: "info",
+                message: `🛡️ MEDIUM sensitivity request — data masked before cloud transmission. Input: "${inputPreview}..."`,
+                timestamp: req.timestamp,
+                metric_type: "medium_masked",
+            });
+        }
     }
 
     if (!combined.length) {
@@ -369,23 +389,35 @@ function updateAlerts(alerts, history) {
         return;
     }
 
-    // Sort by severity priority then timestamp
+    // Normalise timestamp to milliseconds (handles both Unix-epoch seconds and ISO strings)
+    function alertMs(t) {
+        if (!t) return 0;
+        return typeof t === "number" ? t * 1000 : new Date(t).getTime();
+    }
+
+    // Sort: newest first; ties broken by severity (critical > warning > info)
     const severityOrder = { critical: 0, warning: 1, info: 2 };
-    combined.sort((a, b) => (severityOrder[a.severity] ?? 3) - (severityOrder[b.severity] ?? 3));
+    combined.sort((a, b) => {
+        const timeDiff = alertMs(b.timestamp) - alertMs(a.timestamp);
+        if (timeDiff !== 0) return timeDiff;
+        return (severityOrder[a.severity] ?? 3) - (severityOrder[b.severity] ?? 3);
+    });
 
     panel.className = "scroll-region";
     panel.innerHTML = combined.map((alert) => {
         const severity = escapeHtml(alert.severity || "info");
         const icons = { critical: "🔴", warning: "🟡", info: "🔵" };
+        const ms = alertMs(alert.timestamp);
+        const timeStr = ms ? new Date(ms).toLocaleTimeString() : "—";
         return `
             <article class="alert-item alert-${severity}">
                 <div class="alert-header">
                     <span class="alert-severity-icon">${icons[severity] || "ℹ️"}</span>
                     <strong class="alert-severity-label">${severity.toUpperCase()}</strong>
                     <span class="alert-type-badge">${escapeHtml(alert.metric_type || "metric")}</span>
+                    <span class="alert-time">${timeStr}</span>
                 </div>
                 <p class="alert-message">${escapeHtml(alert.message || "Alert")}</p>
-                <small class="alert-time">${formatTime(alert.timestamp)}</small>
             </article>
         `;
     }).join("");
@@ -623,6 +655,7 @@ async function runSimulation() {
         }
 
         updateDashboard(payload.dashboard);
+        loadAuditLog();
     } catch (error) {
         result.textContent = error.message;
         llmOutput.textContent = "";
