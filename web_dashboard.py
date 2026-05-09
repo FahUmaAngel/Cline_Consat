@@ -7,8 +7,8 @@ Author: CONSAT PoC Team
 Date: May 4, 2026
 """
 
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Form
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
@@ -23,6 +23,7 @@ import uvicorn
 from monitoring_dashboard_prototype import MonitoringDashboard
 from secure_agentic_workflow import SecureAgenticWorkflow
 import stockholm_bus_data as bus_db
+import file_vault
 import data_policy
 
 # Global components
@@ -113,6 +114,91 @@ async def get_dashboard_html(request: Request):
 async def get_data_explorer(request: Request):
     """Serve data explorer page."""
     return templates.TemplateResponse("data-explorer.html", {"request": request})
+
+@app.get("/file-vault", response_class=HTMLResponse)
+async def get_file_vault(request: Request):
+    """Serve file vault page."""
+    return templates.TemplateResponse("file-vault.html", {"request": request})
+
+# ── File Vault API ──────────────────────────────────────────────
+
+@app.post("/api/vault/upload")
+async def vault_upload(
+    file: UploadFile = File(...),
+    tier: str = Form(None),
+    tags: str = Form(""),
+    description: str = Form(""),
+):
+    """Upload a file to the vault."""
+    content = await file.read()
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
+    entry = file_vault.add_file(
+        filename=file.filename,
+        content_bytes=content,
+        tier=tier if tier else None,
+        tags=tag_list,
+        description=description,
+    )
+    return {"success": True, "file": entry}
+
+@app.get("/api/vault/files")
+async def vault_list(
+    tier: str = None,
+    search: str = None,
+    view: str = "admin",
+):
+    """List files in the vault."""
+    files = file_vault.list_files(tier=tier, search=search, view=view)
+    return {"files": files, "count": len(files)}
+
+@app.get("/api/vault/stats")
+async def vault_stats():
+    """Get vault statistics."""
+    return file_vault.get_vault_stats()
+
+@app.get("/api/vault/tiers")
+async def vault_tiers():
+    """Get tier definitions."""
+    return file_vault.TIERS
+
+@app.put("/api/vault/files/{file_id}")
+async def vault_update(file_id: str, data: dict):
+    """Update file metadata (tier, tags, description, starred)."""
+    result = file_vault.update_file(
+        file_id,
+        tier=data.get("tier"),
+        tags=data.get("tags"),
+        description=data.get("description"),
+        starred=data.get("starred"),
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="File not found")
+    return {"success": True, "file": result}
+
+@app.delete("/api/vault/files/{file_id}")
+async def vault_delete(file_id: str):
+    """Delete a file from the vault."""
+    if not file_vault.delete_file(file_id):
+        raise HTTPException(status_code=404, detail="File not found")
+    return {"success": True}
+
+@app.get("/api/vault/download/{file_id}")
+async def vault_download(file_id: str):
+    """Download a file from the vault."""
+    entry = file_vault.get_file(file_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="File not found")
+    content = file_vault.get_file_bytes(file_id)
+    if content is None:
+        raise HTTPException(status_code=404, detail="File data not found")
+    # Update download count
+    entry["download_count"] = entry.get("download_count", 0) + 1
+    file_vault._persist()
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type=entry.get("mime_guess", "application/octet-stream"),
+        headers={"Content-Disposition": f'attachment; filename="{entry["filename"]}"'},
+    )
 
 @app.get("/api/bus-data")
 async def get_bus_data(table: str = "bus_routes", view: str = "internal"):
