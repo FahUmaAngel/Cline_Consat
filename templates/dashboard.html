@@ -223,35 +223,39 @@
             </aside>
         </div>
 
-        <!-- ── Section: Guardrails + Audit Stream ───────── -->
+        <!-- ── Section: Guardrails ──────────────────────── -->
         <div class="metrics-section">
             <p class="metrics-section-label">
-                <i class="fa-solid fa-shield-halved"></i> Guardrails &amp; Audit Stream
+                <i class="fa-solid fa-shield-halved"></i> Guardrails
             </p>
-            <div class="panel-pair">
-                <div class="panel alerts-panel">
-                    <div class="panel-header">
-                        <div>
-                            <p class="eyebrow">Guardrails</p>
-                            <h2>Alerts</h2>
-                        </div>
-                        <span class="soft-badge">policy + latency</span>
+            <div class="panel alerts-panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="eyebrow">Guardrails</p>
+                        <h2>Alerts</h2>
                     </div>
-                    <div id="alerts-panel" class="scroll-region empty-state">No alerts</div>
+                    <span class="soft-badge">policy + latency</span>
                 </div>
+                <div id="alerts-panel" class="scroll-region empty-state">No alerts</div>
+            </div>
+        </div>
 
-                <div class="panel history-panel">
-                    <div class="panel-header">
-                        <div>
-                            <p class="eyebrow">Audit Stream</p>
-                            <h2>Request History</h2>
-                        </div>
-                        <button id="refresh-now" class="icon-button" title="Refresh now" type="button">
-                            <i class="fa-solid fa-rotate"></i>
-                        </button>
+        <!-- ── Section: Audit Stream ─────────────────────── -->
+        <div class="metrics-section">
+            <p class="metrics-section-label">
+                <i class="fa-solid fa-clock-rotate-left"></i> Audit Stream
+            </p>
+            <div class="panel history-panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="eyebrow">Audit Stream</p>
+                        <h2>Request History</h2>
                     </div>
-                    <div id="history-panel" class="scroll-region empty-state">No requests yet</div>
+                    <button id="refresh-now" class="icon-button" title="Refresh now" type="button">
+                        <i class="fa-solid fa-rotate"></i>
+                    </button>
                 </div>
+                <div id="history-panel" class="scroll-region empty-state">No requests yet</div>
             </div>
         </div>
 

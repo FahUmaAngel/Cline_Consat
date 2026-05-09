@@ -814,8 +814,8 @@ select:focus {
 }
 
 /* ── Alerts & History ────────────────────────────────────────── */
-.alerts-panel,
-.history-panel { min-height: 320px; }
+.alerts-panel { min-height: 260px; }
+.history-panel { min-height: 400px; }
 
 .scroll-region {
     max-height: 284px;
