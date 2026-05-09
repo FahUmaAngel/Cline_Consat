@@ -33,6 +33,18 @@ active_connections = []
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
+# Map legacy Thai routing reasons to English (for in-memory or on-disk entries
+# written before the translation was applied to sensitivity_router_prototype.py)
+_THAI_TRANSLATIONS: dict = {
+    "HIGH SENSITIVITY data -> force Local LLM for security": "HIGH SENSITIVITY data -> force Local LLM for security",
+    "MEDIUM SENSITIVITY data -> route to Cloud after Data Masking": "MEDIUM SENSITIVITY data -> route to Cloud after Data Masking",
+    "LOW SENSITIVITY data -> route to Cloud LLM for performance": "LOW SENSITIVITY data -> route to Cloud LLM for performance",
+}
+
+def _translate(text: str) -> str:
+    """Translate a known Thai string to English; pass through anything else."""
+    return _THAI_TRANSLATIONS.get(text, text)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for FastAPI app"""
@@ -131,7 +143,7 @@ def _serialize_history(limit: int = 20):
         row["force_route"] = item.get("force_route", "auto")
         # Rich policy data for the UI
         row["detected_patterns"] = item.get("routing", {}).get("detected_patterns", [])
-        row["routing_reason"] = item.get("routing", {}).get("reason", "")
+        row["routing_reason"] = _translate(item.get("routing", {}).get("reason", ""))
         row["schema_masking"] = item.get("schema_masking", {})
         row["policy_violations"] = item.get("policy_check", {}).get("violations", [])
         row["data_classification"] = _classify_from_patterns(item)
@@ -506,9 +518,13 @@ async def websocket_metrics(websocket: WebSocket):
 async def get_audit_log(last_n: int = 30):
     """Return ISO27001 audit trail events and compliance summary."""
     import audit_log as _audit
+    events = _audit.get_recent_events(last_n)
+    for e in events:
+        if "reason" in e:
+            e["reason"] = _translate(e["reason"])
     return {
         "timestamp": datetime.now().isoformat(),
-        "recent_events": _audit.get_recent_events(last_n),
+        "recent_events": events,
         "summary": _audit.get_audit_summary(),
     }
 
