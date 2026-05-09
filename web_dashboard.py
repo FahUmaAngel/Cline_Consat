@@ -17,6 +17,7 @@ from datetime import datetime
 from pathlib import Path
 import asyncio
 import io
+import time
 import uvicorn
 
 # Import our existing components
@@ -139,6 +140,45 @@ async def vault_upload(
         tags=tag_list,
         description=description,
     )
+
+    # ── Push audit event into dashboard history stream ──────────
+    assigned_tier = entry["tier"]
+    tier_to_sensitivity = {
+        "PUBLIC": "low", "PII": "medium", "SPII": "high", "SECRET": "high"
+    }
+    tier_to_route = {
+        "PUBLIC": "cloud", "PII": "local", "SPII": "local", "SECRET": "local"
+    }
+    tier_to_status = {
+        "PUBLIC": "approved", "PII": "approved", "SPII": "blocked", "SECRET": "approved"
+    }
+    if workflow:
+        workflow.request_history.append({
+            "event_type": "vault_upload",
+            "timestamp": time.time(),
+            "user_input": f"File uploaded: {entry['filename']}",
+            "status": tier_to_status.get(assigned_tier, "approved"),
+            "routing": {
+                "llm_used": tier_to_route.get(assigned_tier, "local"),
+                "sensitivity_level": tier_to_sensitivity.get(assigned_tier, "low"),
+                "detected_patterns": [f"tier:{assigned_tier}"],
+                "reason": f"Vault upload — auto-classified as {assigned_tier}",
+            },
+            "metrics": {
+                "processing_time_ms": 0,
+                "masked_items_count": 1 if assigned_tier in ("PII", "SPII", "SECRET") else 0,
+            },
+            "policy_check": {
+                "critical_violations": 1 if assigned_tier == "SPII" else 0,
+            },
+            "vault_file": {
+                "file_id": entry["file_id"],
+                "filename": entry["filename"],
+                "tier": assigned_tier,
+                "size_bytes": entry["size_bytes"],
+            },
+        })
+
     return {"success": True, "file": entry}
 
 @app.get("/api/vault/files")
