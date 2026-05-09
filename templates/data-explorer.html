@@ -10,7 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
     <link href="/static/css/dashboard.css" rel="stylesheet">
-    <link href="/static/css/data-explorer.css?v=2" rel="stylesheet">
+    <link href="/static/css/data-explorer.css?v=3" rel="stylesheet">
 </head>
 <body>
     <div class="app-frame">
@@ -43,9 +43,6 @@
                 </div>
                 <div class="status-cluster">
                     <span id="record-count">0 records</span>
-                    <span id="view-indicator" class="view-indicator internal">
-                        <i class="fa-solid fa-building"></i> Internal View — Full Data
-                    </span>
                 </div>
             </header>
 
@@ -119,9 +116,8 @@
                     </div>
                     <span id="view-indicator" class="view-indicator admin-view"><i class="fa-solid fa-user-gear"></i> Admin View — All Data</span>
                     <div class="policy-legend">
-                        <span><i class="fa-solid fa-lock-open" style="color:#16a34a"></i> PUBLIC — pass</span>
-                        <span><i class="fa-solid fa-id-badge" style="color:#2563eb"></i> PII — hash/encrypt</span>
-                        <span><i class="fa-solid fa-user-shield" style="color:#e04e17"></i> SPII — always masked</span>
+                        <span><i class="fa-solid fa-lock-open" style="color:#16a34a"></i> PUBLIC — share freely</span>
+                        <span><i class="fa-solid fa-user-shield" style="color:#d97706"></i> PII — hash / encrypt</span>
                         <span><i class="fa-solid fa-ban" style="color:#dc2626"></i> SECRET — redact</span>
                     </div>
                 </section>

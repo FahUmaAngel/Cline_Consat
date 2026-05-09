@@ -7,21 +7,19 @@
     "use strict";
 
     // ---- State ----
-        let currentTable = "drivers";
-        let currentView = "admin"; // "admin" | "internal" | "external"
-        let policyData = {};
+    let currentTable = "drivers";
+    let currentView = "admin"; // "admin" | "internal" | "external"
+    let policyData = {};
 
     // ---- DOM refs ----
     const tableBody = document.getElementById("table-body");
     const tableHead = document.getElementById("table-head");
     const dataTable = document.getElementById("data-table");
-    const viewIndicator = document.getElementById("view-indicator");
-    const labelInternal = document.getElementById("label-internal");
-    const labelExternal = document.getElementById("label-external");
+    // Bug fix #2: two elements had id="view-indicator"; target the one inside controls-bar
+    const viewIndicator = document.querySelector(".controls-bar .view-indicator");
     const queryInput = document.getElementById("query-input");
     const classifyBtn = document.getElementById("classify-btn");
     const classResult = document.getElementById("class-result");
-        const viewToggle = document.getElementById("view-toggle");
     const recordCount = document.getElementById("record-count");
 
     // ---- Policy badge helper ----
@@ -45,12 +43,13 @@
     }
 
     // ---- Cell rendering ----
-        function renderCell(value) {
-            if (value === null || value === undefined) return "";
-            const str = String(value);
-            if (currentView === "admin") return escapeHtml(str);
-
+    // Bug fix #1: removed duplicate `const str` declaration (caused SyntaxError in strict mode)
+    // Bug fix #3: added `field` parameter to match call site renderCell(row[field], field)
+    function renderCell(value, field) {
+        if (value === null || value === undefined) return "";
         const str = String(value);
+        if (currentView === "admin") return escapeHtml(str);
+
         if (str.startsWith("HASH:")) {
             return `<span class="cell-hashed">${escapeHtml(str)}</span>`;
         }
@@ -135,14 +134,14 @@
             const data = await res.json();
             const policies = data.policies || {};
             const tables = [
-                { key: "bus_routes",          icon: "fa-route",                  label: "Bus Routes" },
-                { key: "bus_vehicles",         icon: "fa-bus",                    label: "Vehicles" },
-                { key: "drivers",              icon: "fa-id-card",                label: "Drivers" },
-                { key: "iot_sensor_readings",  icon: "fa-satellite-dish",         label: "IoT Readings" },
-                { key: "bus_stops",            icon: "fa-map-pin",                label: "Bus Stops" },
-                { key: "maintenance_logs",     icon: "fa-wrench",                 label: "Maintenance" },
-                { key: "driver_shifts",        icon: "fa-calendar-days",          label: "Shifts" },
-                { key: "incidents",            icon: "fa-triangle-exclamation",   label: "Incidents" },
+                { key: "bus_routes",          label: "Bus Routes" },
+                { key: "bus_vehicles",         label: "Vehicles" },
+                { key: "drivers",              label: "Drivers" },
+                { key: "iot_sensor_readings",  label: "IoT Readings" },
+                { key: "bus_stops",            label: "Bus Stops" },
+                { key: "maintenance_logs",     label: "Maintenance" },
+                { key: "driver_shifts",        label: "Shifts" },
+                { key: "incidents",            label: "Incidents" },
             ];
 
             for (const t of tables) {
@@ -172,32 +171,33 @@
         loadTable();
     }
 
-    // ---- Toggle view ----
-        // ---- View selector ----
-        const viewConfig = {
-            admin: {
-                cls: "admin-view",
-                html: '<i class="fa-solid fa-user-gear"></i> Admin View — All Data',
-            },
-            internal: {
-                cls: "internal-view",
-                html: '<i class="fa-solid fa-building"></i> Internal View — SPII Masked',
-            },
-            external: {
-                cls: "external-view",
-                html: '<i class="fa-solid fa-handshake"></i> External View — Policy Applied',
-            },
-        };
+    // ---- View selector ----
+    const viewConfig = {
+        admin: {
+            cls: "admin-view",
+            html: '<i class="fa-solid fa-user-gear"></i> Admin View — All Data',
+        },
+        internal: {
+            cls: "internal-view",
+            html: '<i class="fa-solid fa-building"></i> Internal View — SPII Masked',
+        },
+        external: {
+            cls: "external-view",
+            html: '<i class="fa-solid fa-handshake"></i> External View — Policy Applied',
+        },
+    };
 
-        function selectView(view) {
-            currentView = view;
-            document.querySelectorAll(".view-btn").forEach(btn => {
-                btn.classList.toggle("active", btn.dataset.view === view);
-            });
+    function selectView(view) {
+        currentView = view;
+        document.querySelectorAll(".view-btn").forEach(btn => {
+            btn.classList.toggle("active", btn.dataset.view === view);
+        });
+        if (viewIndicator) {
             const cfg = viewConfig[view];
             viewIndicator.className = "view-indicator " + cfg.cls;
             viewIndicator.innerHTML = cfg.html;
-            loadTable();
+        }
+        loadTable();
     }
 
     // ---- Query classifier ----
@@ -260,8 +260,8 @@
     async function init() {
         await loadPolicy();
         await loadSummaryCards();
-           selectView("admin");
-           selectTable("drivers");
+        selectView("admin");
+        selectTable("drivers");
     }
 
     init();
