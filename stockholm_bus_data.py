@@ -349,11 +349,6 @@ def search_data(query_text):
                 results["drivers"].append(driver)
             results["shifts"].extend(get_shifts(driver_id=driver["driver_id"]))
 
-    for log in MAINTENANCE_LOGS:
-        if log["technician_name"].lower() in query or log["technician_id"].lower() in query:
-            if log not in results["maintenance"]:
-                results["maintenance"].append(log)
-
     for vehicle in BUS_VEHICLES:
         if vehicle["vehicle_id"].lower() in query:
             if vehicle not in results["vehicles"]:
