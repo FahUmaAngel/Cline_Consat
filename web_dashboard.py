@@ -62,6 +62,47 @@ def _get_dashboard():
     return dashboard
 
 
+def _classify_from_patterns(item):
+    """Derive the 4-tier data classification from detected patterns and schema masking."""
+    patterns = item.get("routing", {}).get("detected_patterns", [])
+    schema = item.get("schema_masking", {})
+
+    # Check for COMPANY_SECRET indicators
+    secret_keywords = [
+        "consat_eco_drive", "consat_iot_internal", "consat_operations",
+        "consat_finance", "business_secret",
+    ]
+    has_secret = any(
+        any(kw in p.lower() for kw in secret_keywords)
+        for p in patterns
+    )
+    has_redacted = bool(schema.get("redacted_fields"))
+    if has_secret or has_redacted:
+        return "COMPANY_SECRET"
+
+    # Check for SPII indicators
+    spii_patterns = ["personnummer", "personal_number", "license_number"]
+    has_spii = any(
+        any(kw in p.lower() for kw in spii_patterns)
+        for p in patterns
+    )
+    has_encrypted = bool(schema.get("encrypted_fields"))
+    if has_spii or has_encrypted:
+        return "SPII"
+
+    # Check for PII indicators
+    pii_prefixes = ["PII:", "KEYWORD:consat_driver_pii"]
+    has_pii = any(
+        any(p.startswith(prefix) or prefix in p for prefix in pii_prefixes)
+        for p in patterns
+    )
+    has_hashed = bool(schema.get("hashed_fields"))
+    if has_pii or has_hashed:
+        return "PII"
+
+    return "PUBLIC"
+
+
 def _serialize_history(limit: int = 20):
     if not workflow:
         return []
@@ -77,6 +118,12 @@ def _serialize_history(limit: int = 20):
         row["critical_violations"] = item.get("policy_check", {}).get("critical_violations", 0)
         row["force_overridden"] = item.get("force_overridden", False)
         row["force_route"] = item.get("force_route", "auto")
+        # Rich policy data for the UI
+        row["detected_patterns"] = item.get("routing", {}).get("detected_patterns", [])
+        row["routing_reason"] = item.get("routing", {}).get("reason", "")
+        row["schema_masking"] = item.get("schema_masking", {})
+        row["policy_violations"] = item.get("policy_check", {}).get("violations", [])
+        row["data_classification"] = _classify_from_patterns(item)
         serialized.append(row)
     return serialized
 
