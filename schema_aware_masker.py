@@ -144,14 +144,27 @@ def infer_table_name(record_keys: List[str]) -> Optional[str]:
 def apply_policy_to_record(
     table_name: str,
     record: Dict[str, Any],
+    mode: str = "cloud",
 ) -> Tuple[Dict[str, Any], List[Dict]]:
     """
     Apply POLICY_TABLE rules to every field in a record dict.
 
+    4-Tier Classification × 3 Modes:
+
+    | Classification | cloud (external) | local (internal) | admin |
+    |----------------|-------------------|-------------------|-------|
+    | PUBLIC         | pass              | pass              | pass  |
+    | PII            | hash/encrypt      | pass              | pass  |
+    | SPII           | hash/encrypt      | hash/encrypt      | pass  |
+    | COMPANY_SECRET | redact            | pass              | pass  |
+
     Returns:
         masked_record  – dict with sensitive values replaced
-        masking_events – list of {"field", "table", "action", "classification"}
+        masking_events – list of {field, table, action, classification}
     """
+    if mode == "admin":
+        return dict(record), []
+
     masked: Dict[str, Any] = {}
     events: List[Dict] = []
 
@@ -160,38 +173,36 @@ def apply_policy_to_record(
         action = policy.get("action", "pass")
         classification = policy.get("classification", "PUBLIC")
 
-        if action == "pass":
+        # Decide whether to apply masking based on mode + classification
+        should_mask = False
+        if classification == "SPII":
+            should_mask = True              # SPII always masked (both local & cloud)
+        elif classification == "PII" and mode == "cloud":
+            should_mask = True              # PII masked only for cloud
+        elif classification == "COMPANY_SECRET" and mode == "cloud":
+            should_mask = True              # SECRET redacted only for cloud
+
+        if not should_mask:
             masked[field] = value
+            continue
 
-        elif action == "hash":
+        # Apply the configured action
+        if action == "hash":
             masked[field] = data_policy.hash_value(value)
-            events.append({
-                "field": field,
-                "table": table_name,
-                "action": "hash",
-                "classification": classification,
-            })
-
         elif action == "encrypt":
             masked[field] = data_policy.encrypt_value(value)
-            events.append({
-                "field": field,
-                "table": table_name,
-                "action": "encrypt",
-                "classification": classification,
-            })
-
         elif action == "redact":
             masked[field] = data_policy.redact_value(field)
-            events.append({
-                "field": field,
-                "table": table_name,
-                "action": "redact",
-                "classification": classification,
-            })
-
         else:
-            masked[field] = value   # unknown action → safe pass-through
+            masked[field] = value
+            continue
+
+        events.append({
+            "field": field,
+            "table": table_name,
+            "action": action,
+            "classification": classification,
+        })
 
     return masked, events
 
@@ -203,42 +214,35 @@ def apply_policy_to_record(
 def _mask_object(
     obj: Any,
     parent_table: Optional[str] = None,
+    mode: str = "cloud",
 ) -> Tuple[Any, List[Dict]]:
     """
     Recursively walk a parsed JSON structure and apply policy masking.
 
-    - dicts  → infer table, apply per-field policy, recurse into nested values
-    - lists  → recurse into each element
-    - scalars → return as-is (scalars are only masked at the dict-field level)
-
-    Returns (masked_obj, all_masking_events).
+    mode: "cloud" – all actions (hash, encrypt, redact)
+          "local" – only PII actions (hash, encrypt); SECRET passes through
     """
     all_events: List[Dict] = []
 
     if isinstance(obj, dict):
-        # Try to identify which table this dict belongs to
         table = infer_table_name(list(obj.keys())) or parent_table
 
         if table and table in data_policy.POLICY_TABLE:
-            # Apply field-level policy
-            masked_record, events = apply_policy_to_record(table, obj)
+            masked_record, events = apply_policy_to_record(table, obj, mode=mode)
             all_events.extend(events)
 
-            # Recurse into any nested dicts/lists that survived masking
             final: Dict[str, Any] = {}
             for k, v in masked_record.items():
                 if isinstance(v, (dict, list)):
-                    v, sub_events = _mask_object(v, table)
+                    v, sub_events = _mask_object(v, table, mode=mode)
                     all_events.extend(sub_events)
                 final[k] = v
             return final, all_events
 
         else:
-            # No table match — recurse into children anyway (might be a
-            # wrapper dict like {"filtered_results": {...}})
             result: Dict[str, Any] = {}
             for k, v in obj.items():
-                v, sub_events = _mask_object(v, parent_table)
+                v, sub_events = _mask_object(v, parent_table, mode=mode)
                 all_events.extend(sub_events)
                 result[k] = v
             return result, all_events
@@ -246,13 +250,12 @@ def _mask_object(
     elif isinstance(obj, list):
         result_list = []
         for item in obj:
-            item, sub_events = _mask_object(item, parent_table)
+            item, sub_events = _mask_object(item, parent_table, mode=mode)
             all_events.extend(sub_events)
             result_list.append(item)
         return result_list, all_events
 
     else:
-        # Scalar (str, int, float, bool, None) — no field-name context here
         return obj, []
 
 
@@ -290,10 +293,18 @@ def _extract_json_blocks(text: str) -> List[Tuple[int, int, Any]]:
 # Main entry point
 # ---------------------------------------------------------------------------
 
-def scan_and_mask(text: str) -> Tuple[str, Dict]:
+def scan_and_mask(text: str, mode: str = "cloud") -> Tuple[str, Dict]:
     """
     Main entry point.  Given any text (free-form or JSON), apply schema-aware
     policy masking to every JSON structure found inside it.
+
+    Args:
+        text: raw text to scan
+        mode: "cloud" (default) – enforce all policy actions:
+                                    PII → hash/encrypt, SECRET → redact
+              "local"             – enforce PII only:
+                                    PII → hash/encrypt, SECRET → visible
+                                    (on-premise LLM may access proprietary data)
 
     Strategy:
       1. Try to parse the entire text as JSON (fast path).
@@ -304,6 +315,7 @@ def scan_and_mask(text: str) -> Tuple[str, Dict]:
     Returns:
         masked_text  – text with sensitive field values replaced
         report       – {
+            "mode": str,
             "fields_masked": int,
             "tables_detected": [str, ...],
             "events": [{field, table, action, classification}, ...],
@@ -315,7 +327,7 @@ def scan_and_mask(text: str) -> Tuple[str, Dict]:
     # ── Fast path: whole text is JSON ───────────────────────────────────────
     try:
         parsed = json.loads(text)
-        masked_obj, all_events = _mask_object(parsed)
+        masked_obj, all_events = _mask_object(parsed, mode=mode)
         masked_text = json.dumps(masked_obj, ensure_ascii=False, indent=2)
 
     # ── Fallback: scan for embedded JSON blocks ──────────────────────────────
@@ -323,26 +335,27 @@ def scan_and_mask(text: str) -> Tuple[str, Dict]:
         blocks = _extract_json_blocks(text)
         if not blocks:
             # No JSON found at all — return text unchanged, empty report
-            return text, _build_report([])
+            return text, _build_report([], mode)
 
         # Rebuild text by replacing each JSON block with its masked version
         parts: List[str] = []
         cursor = 0
         for start, end, parsed_block in blocks:
             parts.append(text[cursor:start])       # text before this block
-            masked_block, events = _mask_object(parsed_block)
+            masked_block, events = _mask_object(parsed_block, mode=mode)
             all_events.extend(events)
             parts.append(json.dumps(masked_block, ensure_ascii=False))
             cursor = end
         parts.append(text[cursor:])                # text after last block
         masked_text = "".join(parts)
 
-    return masked_text, _build_report(all_events)
+    return masked_text, _build_report(all_events, mode)
 
 
-def _build_report(events: List[Dict]) -> Dict:
+def _build_report(events: List[Dict], mode: str = "cloud") -> Dict:
     """Summarise masking events into a structured report."""
     return {
+        "mode": mode,
         "fields_masked": len(events),
         "tables_detected": sorted({e["table"] for e in events}),
         "events": events,

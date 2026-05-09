@@ -209,11 +209,18 @@ class SecureAgenticWorkflow:
             db_context = self._fetch_context(user_input)
             
             if use_local:
-                # Local LLM: receives raw real data (no masking)
-                enriched_prompt = f"""The user asked: \"{user_input}\"
+                # Local LLM — PII must still be masked (GDPR), SECRET stays visible
+                # (on-premise LLM is trusted for proprietary operational data)
+                print(f"      [MASK] Applying PII masking for local LLM path...")
+                pii_masked_context, masking_info = self.masking.process_for_local(db_context)
+                local_schema = masking_info.get('schema_masking', {})
+                if local_schema.get('fields_masked', 0):
+                    print(f"      [MASK] PII masked: {local_schema['by_action'].get('hash', [])} hashed, "
+                          f"{local_schema['by_action'].get('encrypt', [])} encrypted")
+                enriched_prompt = f"""The user asked: "{user_input}"
 
-Here is the real data from the CONSAT database:
-{db_context}
+Here is the data from the CONSAT database (PII is masked, operational data is accessible):
+{pii_masked_context}
 
 Answer the user's question using only the data above. Be concise and factual."""
             else:

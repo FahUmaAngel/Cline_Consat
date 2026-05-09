@@ -116,7 +116,13 @@ async def get_data_explorer(request: Request):
 
 @app.get("/api/bus-data")
 async def get_bus_data(table: str = "bus_routes", view: str = "internal"):
-    """Get bus data with optional policy filtering."""
+    """Get bus data with policy filtering.
+
+    view modes:
+      admin    → raw data, everything visible
+      internal → SPII masked, PII + SECRET visible
+      external → SPII + PII masked, SECRET redacted
+    """
     table_data_map = {
         "bus_routes":         bus_db.BUS_ROUTES,
         "bus_vehicles":       bus_db.BUS_VEHICLES,
@@ -130,10 +136,16 @@ async def get_bus_data(table: str = "bus_routes", view: str = "internal"):
     raw = table_data_map.get(table, [])
     if not raw:
         raise HTTPException(status_code=404, detail=f"Unknown table: {table}")
-    if view == "external":
-        filtered = data_policy.filter_for_external(table, raw)
+
+    if view == "admin":
+        return {"table": table, "view": "admin", "data": raw, "count": len(raw)}
+    elif view == "external":
+        filtered = data_policy.filter_records(table, raw, mode="external")
         return {"table": table, "view": "external", "data": filtered, "count": len(filtered)}
-    return {"table": table, "view": "internal", "data": raw, "count": len(raw)}
+    else:
+        # internal — mask SPII only
+        filtered = data_policy.filter_records(table, raw, mode="internal")
+        return {"table": table, "view": "internal", "data": filtered, "count": len(filtered)}
 
 @app.get("/api/data-policy")
 async def get_data_policy(table: str = None):
