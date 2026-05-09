@@ -383,6 +383,7 @@ function updateHistory(history) {
         const routingReason = request.routing_reason || "";
         const schema = request.schema_masking || {};
         const violations = request.policy_violations || [];
+        const isVaultUpload = request.event_type === "vault_upload";
 
         // Classification badge
         const classColors = {
@@ -399,7 +400,6 @@ function updateHistory(history) {
         const statusIcons = { approved: "✅", rejected: "❌" };
         let statusBadge;
         if (forceOverridden && (sensitivity === "high" || classification === "COMPANY_SECRET")) {
-            // Dangerous override: COMPANY_SECRET forced to Cloud → show BLOCKED
             statusBadge = `<span class="decision-badge decision-blocked">⛔ BLOCKED</span>`;
         } else if (forceOverridden) {
             statusBadge = `<span class="decision-badge decision-override">⚡ OVERRIDE</span>`;
@@ -469,6 +469,34 @@ function updateHistory(history) {
         const overrideWarning = (forceOverridden && sensitivity === "high")
             ? `<div class="history-override-warning">⚠️ Manually overridden — data was masked before cloud routing</div>`
             : "";
+
+        // Vault upload events get a distinct rendering (from kwan branch)
+        if (isVaultUpload) {
+            const vf = request.vault_file || {};
+            const tier = vf.tier || "PUBLIC";
+            const tierColors = { PUBLIC: "#16a34a", PII: "#d97706", SPII: "#7c3aed", SECRET: "#dc2626" };
+            const tierBgs = { PUBLIC: "#ecfdf3", PII: "#fffbeb", SPII: "#f5f3ff", SECRET: "#fff1f2" };
+            const tierIcons = { PUBLIC: "fa-lock-open", PII: "fa-user-shield", SPII: "fa-shield-halved", SECRET: "fa-ban" };
+            const accentColor = tierColors[tier] || "#2563eb";
+            const fileSize = vf.size_bytes ? formatFileSize(vf.size_bytes) : "";
+            return `
+                <article class="history-item" style="border-left-color: ${accentColor};">
+                    <div>
+                        <div class="history-title">
+                            <span class="route-badge" style="background:${tierBgs[tier]};color:${accentColor};"><i class="fa-solid ${tierIcons[tier]}"></i> ${escapeHtml(tier)}</span>
+                            <span class="decision-badge" style="background:#eff6ff;color:#2563eb;"><i class="fa-solid fa-cloud-arrow-up"></i> UPLOAD</span>
+                            <strong>${escapeHtml(sensitivity).toUpperCase()} sensitivity</strong>
+                        </div>
+                        <p><i class="fa-solid fa-file" style="margin-right:5px;opacity:0.5;"></i>${escapeHtml(vf.filename || input)}${fileSize ? ' — ' + fileSize : ''}</p>
+                    </div>
+                    <div class="history-meta">
+                        <div>vault</div>
+                        <div>${masked} masked</div>
+                        <div>${formatEpoch(request.timestamp)}</div>
+                    </div>
+                </article>
+            `;
+        }
 
         return `
             <article class="history-item history-${escapeHtml(status)}">
@@ -601,6 +629,14 @@ function formatEpoch(value) {
     if (!value) return "";
     const date = new Date(value * 1000);
     return Number.isNaN(date.getTime()) ? "" : date.toLocaleTimeString();
+}
+
+function formatFileSize(bytes) {
+    if (!bytes || bytes === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 }
 
 function healthColor(status) {
