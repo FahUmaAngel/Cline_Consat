@@ -59,3 +59,31 @@
 [01:38:21.638203] TOOL_END   consat_driver_lookup
 [01:38:21.638203] SEND response for tools/call
 [01:38:21.638203] READ_MSG waiting...
+[09:35:55.425514] READ_MSG got EOF
+[09:35:55.436161] SERVER_EOF — exiting
+[09:36:54.593625] MAIN_START pid=23864
+[09:36:54.596819] SERVER_START
+[09:36:54.597820] READ_MSG waiting...
+[09:36:54.598821] READ_MSG raw: b'{"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"Cline","version"'
+[09:36:54.600222] RECV initialize
+[09:36:54.600222] SEND response for initialize
+[09:36:54.601702] READ_MSG waiting...
+[09:36:55.248445] READ_MSG raw: b'{"method":"notifications/initialized","jsonrpc":"2.0"}\n'
+[09:36:55.250453] RECV notifications/initialized
+[09:36:55.250453] READ_MSG waiting...
+[09:36:55.935064] READ_MSG raw: b'{"method":"tools/list","jsonrpc":"2.0","id":1}\n'
+[09:36:55.935064] RECV tools/list
+[09:36:55.937075] SEND response for tools/list
+[09:36:55.937075] READ_MSG waiting...
+[09:36:57.681751] READ_MSG raw: b'{"method":"resources/list","jsonrpc":"2.0","id":2}\n'
+[09:36:57.682872] RECV resources/list
+[09:36:57.683872] SEND response for resources/list
+[09:36:57.685201] READ_MSG waiting...
+[09:36:58.007475] READ_MSG raw: b'{"method":"resources/templates/list","jsonrpc":"2.0","id":3}\n'
+[09:36:58.010427] RECV resources/templates/list
+[09:36:58.011557] SEND response for resources/templates/list
+[09:36:58.018558] READ_MSG waiting...
+[09:36:58.251130] READ_MSG raw: b'{"method":"prompts/list","jsonrpc":"2.0","id":4}\n'
+[09:36:58.252130] RECV prompts/list
+[09:36:58.253131] SEND response for prompts/list
+[09:36:58.255131] READ_MSG waiting...

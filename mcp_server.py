@@ -28,6 +28,7 @@ import io
 import json
 import traceback
 import datetime
+import audit_log as _audit
 
 # File-based debug log — safe to write from any thread, never touches the JSON-RPC pipe
 _LOG_PATH = os.path.join(_PROJECT_DIR, "mcp_debug.log")
@@ -180,6 +181,16 @@ TOOLS = [
             },
         },
     },
+    {
+        "name": "consat_audit_log",
+        "description": "Retrieve the ISO27001 audit trail. Returns recent structured audit events (routing decisions, data access, masking, policy checks) and a compliance summary.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "last_n": {"type": "integer", "description": "Number of recent events to return (default 20)."},
+            },
+        },
+    },
 ]
 
 
@@ -197,6 +208,13 @@ def _content(payload: Dict[str, Any]) -> Dict[str, Any]:
 def consat_route(args: Dict[str, Any]) -> Dict[str, Any]:
     router, _, _, _, _, _ = _get_components()
     result = router.route(args["text"])
+    _audit.log_routing(
+        sensitivity=result.get("sensitivity_level", "unknown"),
+        decision=result.get("routing_decision", "unknown"),
+        reason=result.get("reason", ""),
+        trace_id=_audit.new_trace_id(),
+        force_override=False,
+    )
     _notify_dashboard("consat_route", args, result)
     return _content(result)
 
@@ -204,6 +222,8 @@ def consat_route(args: Dict[str, Any]) -> Dict[str, Any]:
 def consat_mask(args: Dict[str, Any]) -> Dict[str, Any]:
     _, masking, _, _, _, _ = _get_components()
     masked_text, metadata = masking.process_for_cloud(args["text"])
+    masked_count = sum(len(v) for v in metadata.get("masked_items", {}).values()) if metadata else 0
+    _audit.log_masking("mcp_mask_request", masked_count, trace_id=_audit.new_trace_id())
     return _content(
         {
             "masked_text": masked_text,
@@ -215,9 +235,15 @@ def consat_mask(args: Dict[str, Any]) -> Dict[str, Any]:
 
 def consat_policy_check(args: Dict[str, Any]) -> Dict[str, Any]:
     _, _, policy, _, _, _ = _get_components()
+    validation = policy.validate_ai_output(args["code"])
+    _audit.log_policy_check(
+        approved=validation.get("code_approved", False),
+        violations=validation.get("critical_violations", 0),
+        trace_id=_audit.new_trace_id(),
+    )
     return _content(
         {
-            "result": policy.validate_ai_output(args["code"]),
+            "result": validation,
             "summary": policy.get_summary(),
         }
     )
@@ -291,9 +317,12 @@ def consat_driver_lookup(args: Dict[str, Any]) -> Dict[str, Any]:
         return _content({"error": f"Driver {driver_id} not found", "available_ids": [d['driver_id'] for d in bus_db.DRIVERS]})
     raw = matches[0]
     filtered = data_policy.filter_record_for_external("drivers", raw)
+    tid = _audit.new_trace_id()
+    _audit.log_data_access("drivers", "hash", "PII", trace_id=tid, actor="mcp_server")
     result = {
         "driver_filtered": filtered,
         "policy_applied": True,
+        "trace_id": tid,
         "fields_hashed": [f for f, p in data_policy.POLICY_TABLE["drivers"].items() if p["action"] == "hash"],
         "fields_encrypted": [f for f, p in data_policy.POLICY_TABLE["drivers"].items() if p["action"] == "encrypt"],
         "fields_redacted": [f for f, p in data_policy.POLICY_TABLE["drivers"].items() if p["action"] == "redact"],
@@ -322,6 +351,16 @@ def consat_data_policy(args: Dict[str, Any]) -> Dict[str, Any]:
     return _content(result)
 
 
+def consat_audit_log(args: Dict[str, Any]) -> Dict[str, Any]:
+    last_n = int(args.get("last_n", 20))
+    return _content({
+        "recent_events": _audit.get_recent_events(last_n),
+        "summary": _audit.get_audit_summary(),
+        "log_file": "audit_trail.jsonl",
+        "note": "Append-only audit trail. Required for ISO27001 A.12.4 logging and monitoring.",
+    })
+
+
 TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "consat_route": consat_route,
     "consat_mask": consat_mask,
@@ -331,6 +370,7 @@ TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "consat_bus_query": consat_bus_query,
     "consat_driver_lookup": consat_driver_lookup,
     "consat_data_policy": consat_data_policy,
+    "consat_audit_log": consat_audit_log,
 }
 
 

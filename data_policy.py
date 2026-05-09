@@ -15,6 +15,7 @@ import json
 import base64
 import os
 from typing import Any, Dict, List, Optional
+import audit_log
 
 # Demo AES key (in production, use proper key management)
 _DEMO_KEY = b"CONSAT_DEMO_KEY_2026_STOCKHOLM!!"  # 32 bytes for AES-256
@@ -226,7 +227,7 @@ def filter_for_external(table_name: str, records: List[Dict]) -> List[Dict]:
     return [filter_record_for_external(table_name, r) for r in records]
 
 
-def classify_query(query_text: str) -> Dict:
+def classify_query(query_text: str, trace_id: str = "") -> Dict:
     """Analyze a natural-language query to determine if it touches sensitive data."""
     query_lower = query_text.lower()
 
@@ -243,7 +244,7 @@ def classify_query(query_text: str) -> Dict:
         classification = "PUBLIC"
         recommendation = "Safe to share with external partners."
 
-    return {
+    result = {
         "query": query_text,
         "classification": classification,
         "touches_pii": touches_pii,
@@ -254,6 +255,8 @@ def classify_query(query_text: str) -> Dict:
             if kw in query_lower
         ],
     }
+    audit_log.log_query_classification(query_text, classification, recommendation, trace_id=trace_id)
+    return result
 
 
 def get_table_policy_summary(table_name: str) -> Dict:

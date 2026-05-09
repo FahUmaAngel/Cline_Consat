@@ -11,8 +11,10 @@ import time
 import json
 import requests
 import os
+import uuid
 from dotenv import load_dotenv
 from typing import Dict, Optional
+import audit_log
 
 load_dotenv()
 from sensitivity_router_prototype import SensitivityRouter, SensitivityLevel
@@ -168,7 +170,8 @@ class SecureAgenticWorkflow:
             Dict: Final result with all checks and decisions
         """
         start_time = time.time()
-        
+        trace_id = audit_log.new_trace_id()
+
         print(f"\n{'='*80}")
         print("🔐 SECURE AGENTIC WORKFLOW PROCESSING")
         print(f"{'='*80}")
@@ -192,6 +195,14 @@ class SecureAgenticWorkflow:
         print(f"  ├─ Sensitivity Level: {routing_result['sensitivity_level'].upper()}")
         print(f"  ├─ Detected Patterns: {routing_result['detected_patterns']}")
         print(f"  └─ Decision: {routing_result['routing_decision'].upper()}")
+
+        audit_log.log_routing(
+            sensitivity=routing_result['sensitivity_level'],
+            decision=routing_result['routing_decision'],
+            reason=routing_result.get('reason', ''),
+            trace_id=trace_id,
+            force_override=(force_route in ("cloud", "local")),
+        )
         
         # ========== Step 2: Route Decision ==========
         if use_local:
@@ -213,8 +224,10 @@ class SecureAgenticWorkflow:
             print(f"\n[Step 3] 🔒 Data Masking...")
             masked_input, masking_info = self.masking.process_for_cloud(user_input)
             
-            print(f"  ├─ Masked Items: {sum(len(v) for v in masking_info['masked_items'].values())}")
+            masked_count_step3 = sum(len(v) for v in masking_info['masked_items'].values())
+            print(f"  ├─ Masked Items: {masked_count_step3}")
             print(f"  └─ Mapping ID: {masking_info['mapping_id']}")
+            audit_log.log_masking("user_input", masked_count_step3, trace_id=trace_id)
             
             llm_to_use = "cloud"
         
@@ -269,6 +282,8 @@ Answer the user's question using only the data above. Be concise and factual."""
         policy_result = self.policy.validate_ai_output(final_output)
         approved = policy_result['code_approved']
         
+        audit_log.log_policy_check(approved, policy_result['critical_violations'], trace_id=trace_id)
+
         if approved:
             print(f"  ✅ APPROVED (0 critical violations)")
         else:
@@ -312,6 +327,7 @@ Answer the user's question using only the data above. Be concise and factual."""
         # ========== Final Result ==========
         result = {
             'request_id': f"req_{int(time.time() * 1000)}",
+            'trace_id': trace_id,
             'user_input': user_input,
             'status': final_status,
             'force_overridden': force_overridden,

@@ -154,6 +154,9 @@ class DashboardCalculator:
         total_masking_items = sum(metric_values.get('masking_items', []))
         total_policy_violations = sum(metric_values.get('policy_violations', []))
         
+        total_violations_all = sum(metric_values.get('policy_violations', []))
+        quality_rate = ((total_requests - total_violations_all) / total_requests * 100) if total_requests > 0 else 100.0
+
         return {
             'timestamp': datetime.now().isoformat(),
             'total_requests': total_requests,
@@ -166,6 +169,11 @@ class DashboardCalculator:
             'total_policy_violations': total_policy_violations,
             'total_alerts': len(self.metrics_collector.alerts),
             'critical_alerts': len([a for a in self.metrics_collector.alerts if a.severity == 'critical']),
+            # ISO14001: on-premise ratio reduces cloud compute / carbon footprint
+            'on_premise_ratio': f"{local_percent:.1f}%",
+            'cloud_offload_ratio': f"{cloud_percent:.1f}%",
+            # ISO9001: output quality rate (requests without critical policy violations)
+            'quality_pass_rate': f"{quality_rate:.1f}%",
         }
     
     def _empty_stats(self) -> Dict:
@@ -181,6 +189,9 @@ class DashboardCalculator:
             'total_policy_violations': 0,
             'total_alerts': 0,
             'critical_alerts': 0,
+            'on_premise_ratio': '0%',
+            'cloud_offload_ratio': '0%',
+            'quality_pass_rate': '100.0%',
         }
 
 
@@ -252,10 +263,17 @@ class MonitoringDashboard:
         print(f"  Avg Processing Time: {stats['avg_processing_time_ms']} ms")
         print(f"  Total Masked Items: {stats['total_masking_items']}")
         
-        print("\n🔐 SECURITY & COMPLIANCE")
+        print("\n🔐 SECURITY & COMPLIANCE (ISO27001)")
         print(f"  Total Policy Violations: {stats['total_policy_violations']}")
         print(f"  Total Alerts: {stats['total_alerts']}")
         print(f"  Critical Alerts: {stats['critical_alerts']}")
+
+        print("\n🌱 ENVIRONMENTAL METRICS (ISO14001)")
+        print(f"  On-Premise Processing: {stats['on_premise_ratio']}  ← less cloud = lower carbon")
+        print(f"  Cloud Offload:         {stats['cloud_offload_ratio']}")
+
+        print("\n✅ QUALITY METRICS (ISO9001)")
+        print(f"  Output Quality Pass Rate: {stats['quality_pass_rate']}  ← requests without critical violations")
         
         # Display recent alerts
         if self.metrics_collector.alerts:
