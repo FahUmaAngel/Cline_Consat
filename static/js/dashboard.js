@@ -485,6 +485,7 @@ function updateHistory(history) {
                         <div class="history-title">
                             <span class="route-badge" style="background:${tierBgs[tier]};color:${accentColor};"><i class="fa-solid ${tierIcons[tier]}"></i> ${escapeHtml(tier)}</span>
                             <span class="decision-badge" style="background:#eff6ff;color:#2563eb;"><i class="fa-solid fa-cloud-arrow-up"></i> UPLOAD</span>
+                            <span class="route-badge route-${escapeHtml(route)}">${escapeHtml(route).toUpperCase()} LLM</span>
                             <strong>${escapeHtml(sensitivity).toUpperCase()} sensitivity</strong>
                         </div>
                         <p><i class="fa-solid fa-file" style="margin-right:5px;opacity:0.5;"></i>${escapeHtml(vf.filename || input)}${fileSize ? ' — ' + fileSize : ''}</p>

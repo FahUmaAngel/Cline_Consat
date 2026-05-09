@@ -48,186 +48,232 @@
         </div>
     </section>
 
-    <section class="kpi-grid" aria-label="Realtime KPI summary">
-        <article class="metric-card accent-blue">
-            <div class="metric-top">
-                <span>Total Requests</span>
-                <div class="metric-icon"><i class="fa-solid fa-layer-group"></i></div>
-            </div>
-            <strong id="total-requests">0</strong>
-            <small id="route-mix">0 local / 0 cloud</small>
-        </article>
-        <article class="metric-card accent-green">
-            <div class="metric-top">
-                <span>Approval Rate</span>
-                <div class="metric-icon"><i class="fa-solid fa-circle-check"></i></div>
-            </div>
-            <strong id="approval-rate">0%</strong>
-            <small id="decision-mix">0 approved / 0 rejected</small>
-        </article>
-        <article class="metric-card accent-cyan">
-            <div class="metric-top">
-                <span>Masked Data</span>
-                <div class="metric-icon"><i class="fa-solid fa-user-lock"></i></div>
-            </div>
-            <strong id="masked-total">0</strong>
-            <small id="masked-count">0 masked items</small>
-        </article>
-        <article class="metric-card accent-amber">
-            <div class="metric-top">
-                <span>Critical Alerts</span>
-                <div class="metric-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
-            </div>
-            <strong id="critical-total">0</strong>
-            <small id="critical-count">0 critical</small>
-        </article>
-    </section>
+    <div class="metrics-band">
 
-    <!-- ── Compliance KPI band ─────────────────────────── -->
-    <section class="compliance-grid" aria-label="Compliance KPIs">
-        <article class="metric-card accent-blue">
-            <div class="metric-top">
-                <span>ISO27001 — Audit Trail</span>
-                <div class="metric-icon"><i class="fa-solid fa-file-shield"></i></div>
-            </div>
-            <strong id="audit-total">0</strong>
-            <small id="audit-breakdown">0 route · 0 mask · 0 policy</small>
-        </article>
-
-        <article class="metric-card accent-green">
-            <div class="metric-top">
-                <span>ISO14001 — On-Premise</span>
-                <div class="metric-icon"><i class="fa-solid fa-leaf"></i></div>
-            </div>
-            <strong id="on-premise-ratio">0%</strong>
-            <small>local LLM processing · lower carbon footprint</small>
-        </article>
-
-        <article class="metric-card accent-cyan">
-            <div class="metric-top">
-                <span>ISO9001 — Quality Rate</span>
-                <div class="metric-icon"><i class="fa-solid fa-circle-check"></i></div>
-            </div>
-            <strong id="quality-pass-rate">100%</strong>
-            <small>requests without critical policy violations</small>
-        </article>
-    </section>
-
-    <section class="main-grid">
-        <div class="panel route-panel">
-            <div class="panel-header">
-                <div>
-                    <p class="eyebrow">Routing</p>
-                    <h2>LLM Traffic Split</h2>
-                </div>
-                <div class="legend-row">
-                    <span><i class="dot local"></i> Local</span>
-                    <span><i class="dot cloud"></i> Cloud</span>
-                </div>
-            </div>
-            <div class="route-layout">
-                <div class="chart-box donut-box">
-                    <canvas id="routingChart"></canvas>
-                </div>
-                <div class="route-breakdown">
-                    <div>
-                        <span>Local LLM</span>
-                        <strong id="local-percent">0%</strong>
+        <!-- ── Section: Realtime Metrics (4 cards) ── -->
+        <div class="metrics-section">
+            <p class="metrics-section-label">
+                <i class="fa-solid fa-layer-group"></i> Realtime Metrics
+            </p>
+            <div class="kpi-quad">
+                <article class="metric-card accent-blue">
+                    <div class="metric-top">
+                        <span>Total Requests</span>
+                        <div class="metric-icon"><i class="fa-solid fa-layer-group"></i></div>
                     </div>
-                    <div>
-                        <span>Cloud LLM</span>
-                        <strong id="cloud-percent">0%</strong>
+                    <strong id="total-requests">0</strong>
+                    <small id="route-mix">0 local / 0 cloud</small>
+                </article>
+                <article class="metric-card accent-green">
+                    <div class="metric-top">
+                        <span>Approval Rate</span>
+                        <div class="metric-icon"><i class="fa-solid fa-circle-check"></i></div>
+                    </div>
+                    <strong id="approval-rate">0%</strong>
+                    <small id="decision-mix">0 approved / 0 rejected</small>
+                </article>
+                <article class="metric-card accent-cyan">
+                    <div class="metric-top">
+                        <span>Masked Data</span>
+                        <div class="metric-icon"><i class="fa-solid fa-user-lock"></i></div>
+                    </div>
+                    <strong id="masked-total">0</strong>
+                    <small id="masked-count">0 masked items</small>
+                </article>
+                <article class="metric-card accent-amber">
+                    <div class="metric-top">
+                        <span>Critical Alerts</span>
+                        <div class="metric-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                    </div>
+                    <strong id="critical-total">0</strong>
+                    <small id="critical-count">0 critical</small>
+                </article>
+            </div>
+        </div>
+
+        <!-- ── Section: Compliance Standards (3 cards — data is lighter) ── -->
+        <div class="metrics-section">
+            <p class="metrics-section-label">
+                <i class="fa-solid fa-certificate"></i> Compliance Standards
+            </p>
+            <div class="compliance-grid">
+                <article class="metric-card accent-blue">
+                    <div class="metric-top">
+                        <span>ISO27001 — Audit Trail</span>
+                        <div class="metric-icon"><i class="fa-solid fa-file-shield"></i></div>
+                    </div>
+                    <strong id="audit-total">0</strong>
+                    <small id="audit-breakdown">0 route · 0 mask · 0 policy</small>
+                </article>
+                <article class="metric-card accent-green">
+                    <div class="metric-top">
+                        <span>ISO14001 — On-Premise</span>
+                        <div class="metric-icon"><i class="fa-solid fa-leaf"></i></div>
+                    </div>
+                    <strong id="on-premise-ratio">0%</strong>
+                    <small>local LLM processing · lower carbon footprint</small>
+                </article>
+                <article class="metric-card accent-cyan">
+                    <div class="metric-top">
+                        <span>ISO9001 — Quality Rate</span>
+                        <div class="metric-icon"><i class="fa-solid fa-circle-check"></i></div>
+                    </div>
+                    <strong id="quality-pass-rate">100%</strong>
+                    <small>requests without critical policy violations</small>
+                </article>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="panels-band">
+
+        <!-- ── Section: Routing + Latency ───────────────── -->
+        <div class="metrics-section">
+            <p class="metrics-section-label">
+                <i class="fa-solid fa-chart-line"></i> Routing &amp; Latency
+            </p>
+            <div class="panel-pair">
+                <div class="panel route-panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Routing</p>
+                            <h2>LLM Traffic Split</h2>
+                        </div>
+                        <div class="legend-row">
+                            <span><i class="dot local"></i> Local</span>
+                            <span><i class="dot cloud"></i> Cloud</span>
+                        </div>
+                    </div>
+                    <div class="route-layout">
+                        <div class="chart-box donut-box">
+                            <canvas id="routingChart"></canvas>
+                        </div>
+                        <div class="route-breakdown">
+                            <div>
+                                <span>Local LLM</span>
+                                <strong id="local-percent">0%</strong>
+                            </div>
+                            <div>
+                                <span>Cloud LLM</span>
+                                <strong id="cloud-percent">0%</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel chart-panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Latency</p>
+                            <h2>Processing Trend</h2>
+                        </div>
+                        <span class="soft-badge">last 20 updates</span>
+                    </div>
+                    <div class="chart-box">
+                        <canvas id="processingChart"></canvas>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="panel chart-panel">
-            <div class="panel-header">
-                <div>
-                    <p class="eyebrow">Latency</p>
-                    <h2>Processing Trend</h2>
+        <!-- ── Section: Probe ───────────────────────────── -->
+        <div class="metrics-section">
+            <p class="metrics-section-label">
+                <i class="fa-solid fa-flask"></i> Probe
+            </p>
+            <aside class="panel simulation-panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="eyebrow">Simulate Request</p>
+                        <h2>Send a test query through the full AI workflow</h2>
+                    </div>
+                    <button id="quick-safe" class="icon-button" title="Load sample" type="button">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    </button>
                 </div>
-                <span class="soft-badge">last 20 updates</span>
-            </div>
-            <div class="chart-box">
-                <canvas id="processingChart"></canvas>
+                <div class="probe-body">
+                    <div class="probe-input">
+                        <label for="userInput">User input</label>
+                        <textarea id="userInput" rows="5">What is the standard bus route for line 172 in Stockholm?</textarea>
+
+                        <label for="routeOverride">LLM Routing Override</label>
+                        <select id="routeOverride">
+                            <option value="auto">Auto (Sensitivity Router)</option>
+                            <option value="cloud">Force Cloud LLM (Gemini)</option>
+                            <option value="local">Force Local LLM (Gemini)</option>
+                        </select>
+
+                        <button id="run-simulation" class="primary-button" type="button">
+                            <i class="fa-solid fa-play"></i> Run Simulation
+                        </button>
+                    </div>
+                    <div class="probe-output">
+                        <p id="simulation-result" class="result-line">Ready</p>
+                        <label>LLM output</label>
+                        <div id="llmOutput"></div>
+                        <details id="log-details" style="display:none;margin-top:12px;">
+                            <summary style="font-size:12px;font-weight:700;color:#64748b;cursor:pointer;user-select:none;">
+                                <i class="fa-solid fa-terminal" style="margin-right:4px;"></i> Workflow log
+                            </summary>
+                            <pre id="workflowLog" class="workflow-log"></pre>
+                        </details>
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <!-- ── Section: Guardrails + Audit Stream ───────── -->
+        <div class="metrics-section">
+            <p class="metrics-section-label">
+                <i class="fa-solid fa-shield-halved"></i> Guardrails &amp; Audit Stream
+            </p>
+            <div class="panel-pair">
+                <div class="panel alerts-panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Guardrails</p>
+                            <h2>Alerts</h2>
+                        </div>
+                        <span class="soft-badge">policy + latency</span>
+                    </div>
+                    <div id="alerts-panel" class="scroll-region empty-state">No alerts</div>
+                </div>
+
+                <div class="panel history-panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Audit Stream</p>
+                            <h2>Request History</h2>
+                        </div>
+                        <button id="refresh-now" class="icon-button" title="Refresh now" type="button">
+                            <i class="fa-solid fa-rotate"></i>
+                        </button>
+                    </div>
+                    <div id="history-panel" class="scroll-region empty-state">No requests yet</div>
+                </div>
             </div>
         </div>
 
-        <aside class="panel simulation-panel">
-            <div class="panel-header">
-                <div>
-                    <p class="eyebrow">Probe</p>
-                    <h2>Simulate Request</h2>
+        <!-- ── Section: ISO27001 Audit Trail ────────────── -->
+        <div class="metrics-section">
+            <p class="metrics-section-label">
+                <i class="fa-solid fa-file-shield"></i> ISO27001 · A.12.4 Logging &amp; Monitoring
+            </p>
+            <div class="panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="eyebrow">Compliance Log</p>
+                        <h2>Audit Trail</h2>
+                    </div>
+                    <button id="refresh-audit" class="icon-button" title="Refresh audit log" type="button">
+                        <i class="fa-solid fa-rotate"></i>
+                    </button>
                 </div>
-                <button id="quick-safe" class="icon-button" title="Load sample" type="button">
-                    <i class="fa-solid fa-wand-magic-sparkles"></i>
-                </button>
+                <div id="audit-panel" class="scroll-region empty-state" style="max-height:320px;">No audit events yet</div>
             </div>
-            <label for="userInput">User input</label>
-            <textarea id="userInput" rows="4">What is the standard bus route for line 172 in Stockholm?</textarea>
-
-            <label for="routeOverride" style="margin-top: 12px;">LLM Routing Override</label>
-            <select id="routeOverride">
-                <option value="auto">Auto (Sensitivity Router)</option>
-                <option value="cloud">Force Cloud LLM (Gemini)</option>
-                <option value="local">Force Local LLM (Gemini)</option>
-            </select>
-
-            <button id="run-simulation" class="primary-button" type="button" style="margin-top: 6px;">
-                <i class="fa-solid fa-play"></i> Run Simulation
-            </button>
-            <p id="simulation-result" class="result-line">Ready</p>
-
-            <label>LLM output</label>
-            <div id="llmOutput"></div>
-
-            <details id="log-details" style="display:none;margin-top:12px;">
-                <summary style="font-size:12px;font-weight:700;color:#64748b;cursor:pointer;user-select:none;">
-                    <i class="fa-solid fa-terminal" style="margin-right:4px;"></i> Workflow log
-                </summary>
-                <pre id="workflowLog" class="workflow-log"></pre>
-            </details>
-        </aside>
-
-        <div class="panel alerts-panel">
-            <div class="panel-header">
-                <div>
-                    <p class="eyebrow">Guardrails</p>
-                    <h2>Alerts</h2>
-                </div>
-                <span class="soft-badge">policy + latency</span>
-            </div>
-            <div id="alerts-panel" class="scroll-region empty-state">No alerts</div>
         </div>
 
-        <div class="panel history-panel">
-            <div class="panel-header">
-                <div>
-                    <p class="eyebrow">Audit Stream</p>
-                    <h2>Request History</h2>
-                </div>
-                <button id="refresh-now" class="icon-button" title="Refresh now" type="button">
-                    <i class="fa-solid fa-rotate"></i>
-                </button>
-            </div>
-            <div id="history-panel" class="scroll-region empty-state">No requests yet</div>
-        </div>
-    </section>
-
-    <!-- ── ISO27001 Audit Event Stream ──────────────────── -->
-    <div class="panel" style="margin-top:14px;">
-        <div class="panel-header">
-            <div>
-                <p class="eyebrow">ISO27001 · A.12.4 Logging &amp; Monitoring</p>
-                <h2>Audit Trail</h2>
-            </div>
-            <button id="refresh-audit" class="icon-button" title="Refresh audit log" type="button">
-                <i class="fa-solid fa-rotate"></i>
-            </button>
-        </div>
-        <div id="audit-panel" class="scroll-region empty-state" style="max-height:320px;">No audit events yet</div>
     </div>
 
 </main>

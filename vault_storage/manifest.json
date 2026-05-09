@@ -1,1 +1,66 @@
-[]
+[
+  {
+    "file_id": "VF-3220317E5EBD",
+    "filename": "confidential_fleet_budget_2026.csv",
+    "tier": "SECRET",
+    "size_bytes": 545,
+    "sha256": "691eb5ee6225296c74fa689e5f0a3941d139624a64e18c1255e6d0bd29f77a64",
+    "extension": ".csv",
+    "mime_guess": "text/csv",
+    "tags": [],
+    "description": "",
+    "uploaded_at": "2026-05-09T12:26:09.539175Z",
+    "updated_at": "2026-05-09T12:26:09.539175Z",
+    "storage_path": "secret\\VF-3220317E5EBD_confidential_fleet_budget_2026.csv",
+    "download_count": 0,
+    "starred": false
+  },
+  {
+    "file_id": "VF-601DF043B7B8",
+    "filename": "employee_personnummer_registry.csv",
+    "tier": "SPII",
+    "size_bytes": 345,
+    "sha256": "c01d6a8b032714376e69a61f860e37947a381cae43de9cc9bbcc36a90b362712",
+    "extension": ".csv",
+    "mime_guess": "text/csv",
+    "tags": [],
+    "description": "",
+    "uploaded_at": "2026-05-09T12:30:44.588952Z",
+    "updated_at": "2026-05-09T12:30:44.588952Z",
+    "storage_path": "spii\\VF-601DF043B7B8_employee_personnummer_registry.csv",
+    "download_count": 0,
+    "starred": false
+  },
+  {
+    "file_id": "VF-24275D3BD913",
+    "filename": "driver_contact_list_stockholm.csv",
+    "tier": "PII",
+    "size_bytes": 447,
+    "sha256": "f516f11efdf98dfd49eb96f55306da96309ef7c7fa2b4ae7c9139062b16278ea",
+    "extension": ".csv",
+    "mime_guess": "text/csv",
+    "tags": [],
+    "description": "",
+    "uploaded_at": "2026-05-09T12:31:15.198579Z",
+    "updated_at": "2026-05-09T12:31:15.198579Z",
+    "storage_path": "pii\\VF-24275D3BD913_driver_contact_list_stockholm.csv",
+    "download_count": 0,
+    "starred": false
+  },
+  {
+    "file_id": "VF-BB9757FE3897",
+    "filename": "public_passenger_information_guide.docx",
+    "tier": "PUBLIC",
+    "size_bytes": 37344,
+    "sha256": "b0a752f17d57e1afe4dbc437c56493673585fafd746bb0b50b16a26be0d3b552",
+    "extension": ".docx",
+    "mime_guess": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "tags": [],
+    "description": "",
+    "uploaded_at": "2026-05-09T12:35:10.552981Z",
+    "updated_at": "2026-05-09T12:35:10.552981Z",
+    "storage_path": "public\\VF-BB9757FE3897_public_passenger_information_guide.docx",
+    "download_count": 0,
+    "starred": false
+  }
+]
