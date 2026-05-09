@@ -112,18 +112,16 @@
 
                 <!-- View Toggle -->
                 <section class="controls-bar" aria-label="View controls">
-                    <div class="toggle-group">
-                        <span id="label-internal" class="toggle-label active">
-                            <i class="fa-solid fa-building"></i> Internal
-                        </span>
-                        <div id="view-toggle" class="toggle-switch" role="switch" aria-label="Toggle internal/external view" tabindex="0"></div>
-                        <span id="label-external" class="toggle-label">
-                            <i class="fa-solid fa-handshake"></i> External Partner
-                        </span>
+                    <div class="view-selector">
+                        <button class="view-btn active" data-view="admin"><i class="fa-solid fa-user-gear"></i> Admin</button>
+                        <button class="view-btn" data-view="internal"><i class="fa-solid fa-building"></i> Internal</button>
+                        <button class="view-btn" data-view="external"><i class="fa-solid fa-handshake"></i> External</button>
                     </div>
+                    <span id="view-indicator" class="view-indicator admin-view"><i class="fa-solid fa-user-gear"></i> Admin View — All Data</span>
                     <div class="policy-legend">
                         <span><i class="fa-solid fa-lock-open" style="color:#16a34a"></i> PUBLIC — pass</span>
-                        <span><i class="fa-solid fa-user-shield" style="color:#d97706"></i> PII — hash/encrypt</span>
+                        <span><i class="fa-solid fa-id-badge" style="color:#2563eb"></i> PII — hash/encrypt</span>
+                        <span><i class="fa-solid fa-user-shield" style="color:#e04e17"></i> SPII — always masked</span>
                         <span><i class="fa-solid fa-ban" style="color:#dc2626"></i> SECRET — redact</span>
                     </div>
                 </section>

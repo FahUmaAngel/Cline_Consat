@@ -7,21 +7,21 @@
     "use strict";
 
     // ---- State ----
-    let currentTable = "drivers";
-    let currentView = "internal"; // "internal" | "external"
-    let policyData = {};          // field-level policy metadata
+        let currentTable = "drivers";
+        let currentView = "admin"; // "admin" | "internal" | "external"
+        let policyData = {};
 
     // ---- DOM refs ----
     const tableBody = document.getElementById("table-body");
     const tableHead = document.getElementById("table-head");
     const dataTable = document.getElementById("data-table");
-    const viewToggle = document.getElementById("view-toggle");
     const viewIndicator = document.getElementById("view-indicator");
     const labelInternal = document.getElementById("label-internal");
     const labelExternal = document.getElementById("label-external");
     const queryInput = document.getElementById("query-input");
     const classifyBtn = document.getElementById("classify-btn");
     const classResult = document.getElementById("class-result");
+        const viewToggle = document.getElementById("view-toggle");
     const recordCount = document.getElementById("record-count");
 
     // ---- Policy badge helper ----
@@ -45,8 +45,10 @@
     }
 
     // ---- Cell rendering ----
-    function renderCell(value, field) {
-        if (currentView === "internal") return escapeHtml(String(value));
+        function renderCell(value) {
+            if (value === null || value === undefined) return "";
+            const str = String(value);
+            if (currentView === "admin") return escapeHtml(str);
 
         const str = String(value);
         if (str.startsWith("HASH:")) {
@@ -171,17 +173,31 @@
     }
 
     // ---- Toggle view ----
-    function toggleView() {
-        currentView = currentView === "internal" ? "external" : "internal";
-        viewToggle.classList.toggle("external", currentView === "external");
-        labelInternal.classList.toggle("active", currentView === "internal");
-        labelExternal.classList.toggle("active", currentView === "external");
+        // ---- View selector ----
+        const viewConfig = {
+            admin: {
+                cls: "admin-view",
+                html: '<i class="fa-solid fa-user-gear"></i> Admin View — All Data',
+            },
+            internal: {
+                cls: "internal-view",
+                html: '<i class="fa-solid fa-building"></i> Internal View — SPII Masked',
+            },
+            external: {
+                cls: "external-view",
+                html: '<i class="fa-solid fa-handshake"></i> External View — Policy Applied',
+            },
+        };
 
-        viewIndicator.className = "view-indicator " + (currentView === "internal" ? "internal" : "external-view");
-        viewIndicator.innerHTML = currentView === "internal"
-            ? '<i class="fa-solid fa-building"></i> Internal View — Full Data'
-            : '<i class="fa-solid fa-handshake"></i> External Partner View — Policy Applied';
-        loadTable();
+        function selectView(view) {
+            currentView = view;
+            document.querySelectorAll(".view-btn").forEach(btn => {
+                btn.classList.toggle("active", btn.dataset.view === view);
+            });
+            const cfg = viewConfig[view];
+            viewIndicator.className = "view-indicator " + cfg.cls;
+            viewIndicator.innerHTML = cfg.html;
+            loadTable();
     }
 
     // ---- Query classifier ----
@@ -231,7 +247,9 @@
         });
     });
 
-    viewToggle.addEventListener("click", toggleView);
+    document.querySelectorAll(".view-btn").forEach(btn => {
+        btn.addEventListener("click", () => selectView(btn.dataset.view));
+    });
 
     classifyBtn.addEventListener("click", classifyQuery);
     queryInput.addEventListener("keydown", e => {
@@ -242,7 +260,8 @@
     async function init() {
         await loadPolicy();
         await loadSummaryCards();
-        selectTable("drivers"); // Start with drivers — most interesting for PII demo
+           selectView("admin");
+           selectTable("drivers");
     }
 
     init();

@@ -453,16 +453,6 @@ function updateComplianceKPIs(stats, workflow) {
     setText("quality-pass-rate", qualityRate);
 }
 
-async function loadAuditLog() {
-    try {
-        const response = await fetch("/api/audit-log?last_n=30");
-        if (!response.ok) return;
-        const data = await response.json();
-        updateAuditPanel(data.recent_events || [], data.summary || {});
-    } catch (error) {
-        console.warn("Audit log fetch failed:", error);
-    }
-}
 
 function updateAuditPanel(events, summary) {
     // Update ISO27001 KPI card
@@ -509,6 +499,17 @@ function updateAuditPanel(events, summary) {
             </article>
         `;
     }).join("");
+}
+
+async function loadAuditLog() {
+    try {
+        const response = await fetch("/api/audit-log?last_n=30");
+        if (!response.ok) return;
+        const data = await response.json();
+        updateAuditPanel(data.recent_events || [], data.summary || {});
+    } catch (error) {
+        console.warn("Audit log fetch failed:", error);
+    }
 }
 
 window.addEventListener("beforeunload", () => {

@@ -87,3 +87,6 @@
 [09:36:58.252130] RECV prompts/list
 [09:36:58.253131] SEND response for prompts/list
 [09:36:58.255131] READ_MSG waiting...
+[10:43:22.195688] MAIN_START pid=5672
+[10:43:22.197308] SERVER_START
+[10:43:22.197308] READ_MSG waiting...

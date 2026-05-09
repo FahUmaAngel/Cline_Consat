@@ -57,6 +57,12 @@ body { font-family: var(--font); }
     border: 1px solid #fecdd3;
 }
 
+.badge-spii {
+    background: #fff3ed;
+    color: #e04e17;
+    border: 1px solid #fdba8c;
+}
+
 /* ---- Layout ---- */
 .explorer-shell {
     width: min(1600px, 100%);
@@ -73,6 +79,12 @@ body { font-family: var(--font); }
     font-size: var(--text-sm);
     font-weight: 700;
 }
+.view-selector {
+    display: flex;
+    gap: 4px;
+    background: #f1f5f9;
+    border-radius: 10px;
+    padding: 4px;
 
 /* ---- Summary Cards ---- */
 .summary-grid {
