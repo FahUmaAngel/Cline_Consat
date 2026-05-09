@@ -27,6 +27,18 @@ from typing import Any, Callable, Dict
 import io
 import json
 import traceback
+import datetime
+import audit_log as _audit
+
+# File-based debug log — safe to write from any thread, never touches the JSON-RPC pipe
+_LOG_PATH = os.path.join(_PROJECT_DIR, "mcp_debug.log")
+
+def _log(msg: str) -> None:
+    try:
+        with open(_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(f"[{datetime.datetime.now().strftime('%H:%M:%S.%f')}] {msg}\n")
+    except Exception:
+        pass
 
 _router = None
 _masking = None
@@ -54,6 +66,33 @@ def _get_components():
     return _router, _masking, _policy, _workflow, _bus_db, _data_policy
 
 
+_DASHBOARD_URL = os.getenv("CONSAT_DASHBOARD_URL", "http://localhost:8000")
+
+
+def _notify_dashboard(tool: str, args: dict, result: dict) -> None:
+    """
+    Send the computed result to the dashboard for monitoring — fire-and-forget.
+    Runs in a daemon thread so it NEVER blocks the MCP stdin/stdout loop.
+    """
+    import threading
+
+    def _post() -> None:
+        try:
+            import urllib.request
+            body = json.dumps({"tool": tool, "args": args, "result": result}).encode("utf-8")
+            req = urllib.request.Request(
+                f"{_DASHBOARD_URL}/api/mcp/track",
+                data=body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            pass  # Dashboard unavailable — silent, never crash MCP
+
+    threading.Thread(target=_post, daemon=True).start()
+
+
 TOOLS = [
     {
         "name": "consat_route",
@@ -68,11 +107,22 @@ TOOLS = [
     },
     {
         "name": "consat_mask",
-        "description": "Mask CONSAT-sensitive values before sending content to a cloud LLM.",
+        "description": "Mask CONSAT-sensitive values before sending content to a cloud LLM. Runs two passes: (1) schema-aware column masking against the POLICY_TABLE, then (2) regex pattern masking for emails, API keys, personnummer, etc.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "text": {"type": "string", "description": "Text to mask."},
+                "text": {"type": "string", "description": "Text to mask (can contain JSON with field names from the bus data schema)."},
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "consat_schema_mask",
+        "description": "Apply schema-aware column masking directly: scan any JSON for field names that appear in the bus-data POLICY_TABLE and apply hash / encrypt / redact per column automatically. Use this to test or demonstrate column-level policy enforcement without going through the full workflow.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "JSON string or text containing JSON blocks with field names from the bus data schema."},
             },
             "required": ["text"],
         },
@@ -142,6 +192,16 @@ TOOLS = [
             },
         },
     },
+    {
+        "name": "consat_audit_log",
+        "description": "Retrieve the ISO27001 audit trail. Returns recent structured audit events (routing decisions, data access, masking, policy checks) and a compliance summary.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "last_n": {"type": "integer", "description": "Number of recent events to return (default 20)."},
+            },
+        },
+    },
 ]
 
 
@@ -158,26 +218,67 @@ def _content(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 def consat_route(args: Dict[str, Any]) -> Dict[str, Any]:
     router, _, _, _, _, _ = _get_components()
-    return _content(router.route(args["text"]))
+    result = router.route(args["text"])
+    _audit.log_routing(
+        sensitivity=result.get("sensitivity_level", "unknown"),
+        decision=result.get("routing_decision", "unknown"),
+        reason=result.get("reason", ""),
+        trace_id=_audit.new_trace_id(),
+        force_override=False,
+    )
+    _notify_dashboard("consat_route", args, result)
+    return _content(result)
 
 
 def consat_mask(args: Dict[str, Any]) -> Dict[str, Any]:
     _, masking, _, _, _, _ = _get_components()
     masked_text, metadata = masking.process_for_cloud(args["text"])
+    masked_count = sum(len(v) for v in (metadata or {}).get("masked_items", {}).values()) if metadata else 0
+    _audit.log_masking("mcp_mask_request", masked_count, trace_id=_audit.new_trace_id())
+    schema_report = (metadata or {}).get("schema_masking", {})
     return _content(
         {
             "masked_text": masked_text,
             "metadata": metadata,
             "summary": masking.get_summary(),
+            "schema_masking_report": {
+                "fields_masked_by_column_policy": schema_report.get("fields_masked", 0),
+                "tables_detected": schema_report.get("tables_detected", []),
+                "hashed_fields":   schema_report.get("by_action", {}).get("hash", []),
+                "encrypted_fields": schema_report.get("by_action", {}).get("encrypt", []),
+                "redacted_fields": schema_report.get("by_action", {}).get("redact", []),
+            },
         }
     )
 
 
+def consat_schema_mask(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Standalone schema-aware column masking — no regex, just POLICY_TABLE."""
+    import schema_aware_masker as sam
+    masked_text, report = sam.scan_and_mask(args["text"])
+    return _content({
+        "masked_text": masked_text,
+        "fields_masked": report["fields_masked"],
+        "tables_detected": report["tables_detected"],
+        "hashed_fields":   report["by_action"]["hash"],
+        "encrypted_fields": report["by_action"]["encrypt"],
+        "redacted_fields": report["by_action"]["redact"],
+        "full_events": report["events"],
+        "note": "Policy applied from POLICY_TABLE: PII fields are hashed/encrypted, COMPANY_SECRET fields are redacted.",
+    })
+
+
 def consat_policy_check(args: Dict[str, Any]) -> Dict[str, Any]:
     _, _, policy, _, _, _ = _get_components()
+    validation = policy.validate_ai_output(args["code"])
+    _audit.log_policy_check(
+        approved=validation.get("code_approved", False),
+        violations=validation.get("critical_violations", 0),
+        trace_id=_audit.new_trace_id(),
+    )
     return _content(
         {
-            "result": policy.validate_ai_output(args["code"]),
+            "result": validation,
             "summary": policy.get_summary(),
         }
     )
@@ -189,6 +290,7 @@ def consat_workflow_process(args: Dict[str, Any]) -> Dict[str, Any]:
     with redirect_stdout(log_buffer):
         result = workflow.process(args["user_input"], args.get("llm_output"))
     result["user_input"] = args["user_input"]
+    _notify_dashboard("consat_workflow_process", args, result)
     return _content(
         {
             "success": True,
@@ -219,21 +321,27 @@ def consat_bus_query(args: Dict[str, Any]) -> Dict[str, Any]:
     raw_results = bus_db.search_data(query)
     filtered = {}
     table_map = {
-        "routes": "bus_routes",
-        "vehicles": "bus_vehicles",
-        "drivers": "drivers",
-        "readings": "iot_sensor_readings",
+        "routes":      "bus_routes",
+        "vehicles":    "bus_vehicles",
+        "drivers":     "drivers",
+        "readings":    "iot_sensor_readings",
+        "stops":       "bus_stops",
+        "maintenance": "maintenance_logs",
+        "shifts":      "driver_shifts",
+        "incidents":   "incidents",
     }
     for key, table_name in table_map.items():
         if raw_results.get(key):
             filtered[key] = data_policy.filter_for_external(table_name, raw_results[key])
-    return _content({
+    result = {
         "query_classification": classification,
         "filtered_results": filtered,
         "record_counts": {k: len(v) for k, v in filtered.items()},
         "policy_applied": True,
         "note": "PII fields are hashed, COMPANY_SECRET fields are redacted for external sharing.",
-    })
+    }
+    _notify_dashboard("consat_bus_query", args, result)
+    return _content(result)
 
 
 def consat_driver_lookup(args: Dict[str, Any]) -> Dict[str, Any]:
@@ -244,14 +352,19 @@ def consat_driver_lookup(args: Dict[str, Any]) -> Dict[str, Any]:
         return _content({"error": f"Driver {driver_id} not found", "available_ids": [d['driver_id'] for d in bus_db.DRIVERS]})
     raw = matches[0]
     filtered = data_policy.filter_record_for_external("drivers", raw)
-    return _content({
+    tid = _audit.new_trace_id()
+    _audit.log_data_access("drivers", "hash", "PII", trace_id=tid, actor="mcp_server")
+    result = {
         "driver_filtered": filtered,
         "policy_applied": True,
+        "trace_id": tid,
         "fields_hashed": [f for f, p in data_policy.POLICY_TABLE["drivers"].items() if p["action"] == "hash"],
         "fields_encrypted": [f for f, p in data_policy.POLICY_TABLE["drivers"].items() if p["action"] == "encrypt"],
         "fields_redacted": [f for f, p in data_policy.POLICY_TABLE["drivers"].items() if p["action"] == "redact"],
         "note": "Full unfiltered data only available via LOCAL LLM.",
-    })
+    }
+    _notify_dashboard("consat_driver_lookup", args, result)
+    return _content(result)
 
 
 def consat_data_policy(args: Dict[str, Any]) -> Dict[str, Any]:
@@ -273,41 +386,47 @@ def consat_data_policy(args: Dict[str, Any]) -> Dict[str, Any]:
     return _content(result)
 
 
+def consat_audit_log(args: Dict[str, Any]) -> Dict[str, Any]:
+    last_n = int(args.get("last_n", 20))
+    return _content({
+        "recent_events": _audit.get_recent_events(last_n),
+        "summary": _audit.get_audit_summary(),
+        "log_file": "audit_trail.jsonl",
+        "note": "Append-only audit trail. Required for ISO27001 A.12.4 logging and monitoring.",
+    })
+
+
 TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "consat_route": consat_route,
     "consat_mask": consat_mask,
+    "consat_schema_mask": consat_schema_mask,
     "consat_policy_check": consat_policy_check,
     "consat_workflow_process": consat_workflow_process,
     "consat_metrics": consat_metrics,
     "consat_bus_query": consat_bus_query,
     "consat_driver_lookup": consat_driver_lookup,
     "consat_data_policy": consat_data_policy,
+    "consat_audit_log": consat_audit_log,
 }
 
 
 def read_message() -> Dict[str, Any] | None:
-    headers = {}
-    while True:
-        line = sys.stdin.buffer.readline()
-        if not line:
-            return None
-        line = line.decode("utf-8").strip()
-        if not line:
-            break
-        if ":" in line:
-            key, value = line.split(":", 1)
-            headers[key.lower()] = value.strip()
-
-    content_length = int(headers.get("content-length", "0"))
-    if content_length <= 0:
+    """Read one newline-delimited JSON message from stdin (MCP 2025-11-25 transport)."""
+    _log("READ_MSG waiting...")
+    raw = sys.stdin.buffer.readline()
+    if not raw:
+        _log("READ_MSG got EOF")
         return None
-    body = sys.stdin.buffer.read(content_length)
-    return json.loads(body.decode("utf-8"))
+    _log(f"READ_MSG raw: {raw[:120]!r}")
+    line = raw.strip()
+    if not line:
+        return read_message()  # skip blank lines
+    return json.loads(line.decode("utf-8"))
 
 
 def send_message(message: Dict[str, Any]) -> None:
-    body = json.dumps(message, ensure_ascii=False).encode("utf-8")
-    _json_rpc_out.write(f"Content-Length: {len(body)}\r\n\r\n".encode("ascii"))
+    """Send one newline-delimited JSON message to stdout (MCP 2025-11-25 transport)."""
+    body = json.dumps(message, ensure_ascii=False).encode("utf-8") + b"\n"
     _json_rpc_out.write(body)
     _json_rpc_out.flush()
 
@@ -329,7 +448,7 @@ def handle(request: Dict[str, Any]) -> Dict[str, Any] | None:
         return success(
             request_id,
             {
-                "protocolVersion": "2024-11-05",
+                "protocolVersion": "2025-11-25",
                 "capabilities": {"tools": {}},
                 "serverInfo": {"name": "consat-secure-workflow", "version": "1.0.0"},
             },
@@ -348,9 +467,13 @@ def handle(request: Dict[str, Any]) -> Dict[str, Any] | None:
         if not handler:
             return error(request_id, -32601, f"Unknown tool: {name}")
         try:
-            return success(request_id, handler(arguments))
+            _log(f"TOOL_START {name}")
+            result = handler(arguments)
+            _log(f"TOOL_END   {name}")
+            return success(request_id, result)
         except Exception as exc:
             details = traceback.format_exc(limit=4)
+            _log(f"TOOL_ERROR {name}: {exc}")
             return error(request_id, -32000, f"{exc}\n{details}")
 
     if request_id is None:
@@ -359,14 +482,20 @@ def handle(request: Dict[str, Any]) -> Dict[str, Any] | None:
 
 
 def main() -> None:
+    _log("SERVER_START")
     while True:
         request = read_message()
         if request is None:
+            _log("SERVER_EOF — exiting")
             break
+        method = request.get("method", "?")
+        _log(f"RECV {method}")
         response = handle(request)
         if response is not None:
+            _log(f"SEND response for {method}")
             send_message(response)
 
 
 if __name__ == "__main__":
+    _log(f"MAIN_START pid={os.getpid()}")
     main()

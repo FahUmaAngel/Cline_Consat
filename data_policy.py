@@ -1,10 +1,21 @@
-"""
+﻿"""
 Data Policy Engine
 ===================
-Controls what data can be shared with external partners.
-- PUBLIC: share freely
-- PII: share only hashed/encrypted (GDPR)
-- COMPANY_SECRET: never share externally (local LLM only)
+Controls what data can be shared across 3 access layers.
+
+4-Tier Classification:
+  - PUBLIC:         share freely with anyone
+  - PII:            operational PII (full_name, registration_plate) â€”
+                    visible internally / local LLM, masked for external / cloud
+  - SPII:           sensitive PII (personal_number, phone, email) â€”
+                    ALWAYS masked, never in ANY LLM context window
+  - COMPANY_SECRET: proprietary data (eco scores, costs, firmware) â€”
+                    visible internally / local LLM, redacted for external / cloud
+
+3 Access Layers:
+  Admin    â†’ see everything raw
+  Internal â†’ SPII masked, PII + SECRET visible
+  External â†’ SPII + PII masked, SECRET redacted
 
 Author: CONSAT PoC Team
 Date: May 6, 2026
@@ -15,6 +26,7 @@ import json
 import base64
 import os
 from typing import Any, Dict, List, Optional
+import audit_log
 
 # Demo AES key (in production, use proper key management)
 _DEMO_KEY = b"CONSAT_DEMO_KEY_2026_STOCKHOLM!!"  # 32 bytes for AES-256
@@ -32,7 +44,7 @@ POLICY_TABLE = {
     },
     "bus_vehicles": {
         "vehicle_id":            {"classification": "PUBLIC",         "action": "pass"},
-        "registration_plate":    {"classification": "PII",            "action": "encrypt"},  # encrypt: plate links directly to a legal entity
+        "registration_plate":    {"classification": "PII",            "action": "encrypt"},  # operational PII: plate links to legal entity
         "vehicle_type":          {"classification": "PUBLIC",         "action": "pass"},
         "capacity":              {"classification": "PUBLIC",         "action": "pass"},
         "iot_device_id":         {"classification": "COMPANY_SECRET", "action": "redact"},
@@ -42,12 +54,12 @@ POLICY_TABLE = {
         "status":                {"classification": "PUBLIC",         "action": "pass"},
     },
     "drivers": {
-        "driver_id":              {"classification": "PUBLIC",         "action": "pass"},   # internal reference ID, not personal data by itself
-        "full_name":              {"classification": "PII",            "action": "hash"},
-        "personal_number":        {"classification": "PII",            "action": "encrypt"},
-        "phone":                  {"classification": "PII",            "action": "hash"},
-        "email":                  {"classification": "PII",            "action": "hash"},
-        "license_number":         {"classification": "PII",            "action": "encrypt"},
+        "driver_id":              {"classification": "PUBLIC",         "action": "pass"},
+        "full_name":              {"classification": "PII",            "action": "hash"},    # operational PII â€” local LLM can see names
+        "personal_number":        {"classification": "SPII",           "action": "encrypt"}, # SPII â€” NEVER in any LLM context
+        "phone":                  {"classification": "SPII",           "action": "hash"},    # SPII â€” direct contact info
+        "email":                  {"classification": "SPII",           "action": "hash"},    # SPII â€” direct contact info
+        "license_number":         {"classification": "SPII",           "action": "encrypt"}, # SPII â€” government-issued ID
         "eco_drive_score":        {"classification": "COMPANY_SECRET", "action": "redact"},
         "training_certification": {"classification": "COMPANY_SECRET", "action": "redact"},
         "assigned_vehicle":       {"classification": "PUBLIC",         "action": "pass"},
@@ -57,8 +69,8 @@ POLICY_TABLE = {
         "vehicle_id":                {"classification": "PUBLIC",         "action": "pass"},
         "route_id":                  {"classification": "PUBLIC",         "action": "pass"},
         "timestamp":                 {"classification": "PUBLIC",         "action": "pass"},
-        "latitude":                  {"classification": "PII",            "action": "hash"},   # precise GPS + driver_id = location tracking of individuals (GDPR)
-        "longitude":                 {"classification": "PII",            "action": "hash"},
+        "latitude":                  {"classification": "SPII",           "action": "hash"},   # SPII â€” GPS + driver = individual tracking
+        "longitude":                 {"classification": "SPII",           "action": "hash"},   # SPII â€” GPS + driver = individual tracking
         "heading_deg":               {"classification": "PUBLIC",         "action": "pass"},
         "speed_kmh":                 {"classification": "PUBLIC",         "action": "pass"},
         "passenger_count":           {"classification": "PUBLIC",         "action": "pass"},
@@ -70,12 +82,12 @@ POLICY_TABLE = {
         "engine_temp_celsius":       {"classification": "COMPANY_SECRET", "action": "redact"},
         "brake_wear_pct":            {"classification": "COMPANY_SECRET", "action": "redact"},
         "tire_pressure_bar":         {"classification": "COMPANY_SECRET", "action": "redact"},
-        "driver_id":                 {"classification": "PII",            "action": "hash"},
+        "driver_id":                 {"classification": "PII",            "action": "hash"},   # operational PII â€” reference ID
     },
     "bus_stops": {
         "stop_id":               {"classification": "PUBLIC", "action": "pass"},
         "stop_name":             {"classification": "PUBLIC", "action": "pass"},
-        "latitude":              {"classification": "PUBLIC", "action": "pass"},   # fixed stop coords are public (not personal)
+        "latitude":              {"classification": "PUBLIC", "action": "pass"},   # fixed stop coords are public
         "longitude":             {"classification": "PUBLIC", "action": "pass"},
         "route_ids":             {"classification": "PUBLIC", "action": "pass"},
         "has_shelter":           {"classification": "PUBLIC", "action": "pass"},
@@ -87,8 +99,8 @@ POLICY_TABLE = {
         "vehicle_id":           {"classification": "PUBLIC",         "action": "pass"},
         "date":                 {"classification": "PUBLIC",         "action": "pass"},
         "maintenance_type":     {"classification": "PUBLIC",         "action": "pass"},
-        "technician_id":        {"classification": "PII",            "action": "hash"},   # person identifier — was wrongly SECRET
-        "technician_name":      {"classification": "PII",            "action": "hash"},
+        "technician_id":        {"classification": "PII",            "action": "hash"},    # operational PII â€” reference
+        "technician_name":      {"classification": "PII",            "action": "hash"},    # operational PII â€” visible internally
         "cost_sek":             {"classification": "COMPANY_SECRET", "action": "redact"},
         "parts_replaced":       {"classification": "COMPANY_SECRET", "action": "redact"},
         "firmware_updated_to":  {"classification": "COMPANY_SECRET", "action": "redact"},
@@ -97,14 +109,14 @@ POLICY_TABLE = {
     },
     "driver_shifts": {
         "shift_id":        {"classification": "PUBLIC",         "action": "pass"},
-        "driver_id":       {"classification": "PII",            "action": "hash"},
+        "driver_id":       {"classification": "PII",            "action": "hash"},    # operational PII â€” reference
         "vehicle_id":      {"classification": "PUBLIC",         "action": "pass"},
         "route_id":        {"classification": "PUBLIC",         "action": "pass"},
         "shift_date":      {"classification": "PUBLIC",         "action": "pass"},
-        "start_time":      {"classification": "PUBLIC",         "action": "pass"},   # schedule data, not personal
+        "start_time":      {"classification": "PUBLIC",         "action": "pass"},
         "end_time":        {"classification": "PUBLIC",         "action": "pass"},
-        "depot":           {"classification": "PUBLIC",         "action": "pass"},   # operational facility, not a secret
-        "break_location":  {"classification": "PII",            "action": "hash"},   # tracks personal movement
+        "depot":           {"classification": "PUBLIC",         "action": "pass"},
+        "break_location":  {"classification": "SPII",           "action": "hash"},    # SPII â€” tracks personal movement
         "overtime_hours":  {"classification": "COMPANY_SECRET", "action": "redact"},
     },
     "incidents": {
@@ -112,11 +124,11 @@ POLICY_TABLE = {
         "type":                  {"classification": "PUBLIC",         "action": "pass"},
         "severity":              {"classification": "PUBLIC",         "action": "pass"},
         "vehicle_id":            {"classification": "PUBLIC",         "action": "pass"},
-        "driver_id":             {"classification": "PII",            "action": "hash"},
+        "driver_id":             {"classification": "PII",            "action": "hash"},    # operational PII
         "route_id":              {"classification": "PUBLIC",         "action": "pass"},
         "timestamp":             {"classification": "PUBLIC",         "action": "pass"},
-        "latitude":              {"classification": "PII",            "action": "hash"},   # incident location tied to driver
-        "longitude":             {"classification": "PII",            "action": "hash"},
+        "latitude":              {"classification": "SPII",           "action": "hash"},    # SPII â€” location tied to driver
+        "longitude":             {"classification": "SPII",           "action": "hash"},    # SPII â€” location tied to driver
         "description":           {"classification": "COMPANY_SECRET", "action": "redact"},
         "status":                {"classification": "PUBLIC",         "action": "pass"},
         "reported_to_authority": {"classification": "PUBLIC",         "action": "pass"},
@@ -136,7 +148,7 @@ SECRET_KEYWORDS = [
     "training_certification", "consat-cert",
     # financial / commercial
     "cost_sek", "maintenance cost", "internal cost", "salary", "wage",
-    "pay", "compensation", "lön", "overtime",
+    "pay", "compensation", "lÃ¶n", "overtime",
     # supply chain & internal docs
     "parts_replaced", "internal_notes", "internal notes",
     "incident description",
@@ -157,14 +169,14 @@ PII_KEYWORDS = [
     "latitude", "longitude", "gps", "coordinates", "location of driver",
     "driver location", "vehicle location",
     # Swedish
-    "personnummer", "körkort",
+    "personnummer", "kÃ¶rkort",
 ]
 
 
 # ============== Transform Functions ==============
 
 def hash_value(value: Any, salt: str = "CONSAT_SALT_2026") -> str:
-    """SHA-256 hash with Consat salt. One-way — cannot be reversed."""
+    """SHA-256 hash with Consat salt. One-way â€” cannot be reversed."""
     raw = f"{salt}:{value}"
     return f"HASH:{hashlib.sha256(raw.encode('utf-8')).hexdigest()[:16]}"
 
@@ -197,36 +209,67 @@ def get_field_policy(table_name: str, field_name: str) -> Dict:
     return table_policy.get(field_name, {"classification": "PUBLIC", "action": "pass"})
 
 
-def apply_field_policy(table_name: str, field_name: str, value: Any) -> Any:
-    """Apply policy transformation to a single field value."""
+def apply_field_policy(table_name: str, field_name: str, value: Any,
+                       mode: str = "external") -> Any:
+    """Apply policy transformation to a single field value.
+
+    mode:
+      'admin'    â†’ everything visible
+      'internal' â†’ SPII masked, PII + SECRET visible
+      'external' â†’ SPII + PII masked, SECRET redacted
+    """
+    if mode == "admin":
+        return value
+
     policy = get_field_policy(table_name, field_name)
     action = policy["action"]
+    classification = policy["classification"]
 
-    if action == "pass":
+    if mode == "internal":
+        # Only mask SPII; let PII and SECRET through
+        if classification != "SPII":
+            return value
+        # SPII â†’ apply its action (hash or encrypt)
+        if action == "hash":    return hash_value(value)
+        if action == "encrypt": return encrypt_value(value)
         return value
-    elif action == "hash":
-        return hash_value(value)
-    elif action == "encrypt":
-        return encrypt_value(value)
-    elif action == "redact":
-        return redact_value(field_name)
+
+    # mode == "external" â€” apply all actions
+    if action == "pass":    return value
+    if action == "hash":    return hash_value(value)
+    if action == "encrypt": return encrypt_value(value)
+    if action == "redact":  return redact_value(field_name)
     return value
 
 
+def filter_record(table_name: str, record: Dict, mode: str = "external") -> Dict:
+    """Apply policy to a single record for the given access mode."""
+    return {field: apply_field_policy(table_name, field, value, mode)
+            for field, value in record.items()}
+
+
+def filter_records(table_name: str, records: List[Dict], mode: str = "external") -> List[Dict]:
+    """Apply policy to a list of records for the given access mode."""
+    return [filter_record(table_name, r, mode) for r in records]
+
+
+# Backward-compatible aliases
 def filter_record_for_external(table_name: str, record: Dict) -> Dict:
-    """Apply policy to a single record for external sharing."""
-    filtered = {}
-    for field, value in record.items():
-        filtered[field] = apply_field_policy(table_name, field, value)
-    return filtered
+    """Apply full external policy to a single record."""
+    return filter_record(table_name, record, mode="external")
 
 
 def filter_for_external(table_name: str, records: List[Dict]) -> List[Dict]:
-    """Apply policy to a list of records for external partner sharing."""
-    return [filter_record_for_external(table_name, r) for r in records]
+    """Apply full external policy to a list of records."""
+    return filter_records(table_name, records, mode="external")
 
 
-def classify_query(query_text: str) -> Dict:
+def filter_for_internal(table_name: str, records: List[Dict]) -> List[Dict]:
+    """Apply internal policy (SPII masked) to a list of records."""
+    return filter_records(table_name, records, mode="internal")
+
+
+def classify_query(query_text: str, trace_id: str = "") -> Dict:
     """Analyze a natural-language query to determine if it touches sensitive data."""
     query_lower = query_text.lower()
 
@@ -243,7 +286,7 @@ def classify_query(query_text: str) -> Dict:
         classification = "PUBLIC"
         recommendation = "Safe to share with external partners."
 
-    return {
+    result = {
         "query": query_text,
         "classification": classification,
         "touches_pii": touches_pii,
@@ -254,12 +297,14 @@ def classify_query(query_text: str) -> Dict:
             if kw in query_lower
         ],
     }
+    audit_log.log_query_classification(query_text, classification, recommendation, trace_id=trace_id)
+    return result
 
 
 def get_table_policy_summary(table_name: str) -> Dict:
-    """Get a summary of all field classifications for a table."""
+    """Get a summary of all field classifications for a table (4-tier)."""
     table = POLICY_TABLE.get(table_name, {})
-    summary = {"public": [], "pii": [], "company_secret": []}
+    summary = {"public": [], "pii": [], "spii": [], "company_secret": []}
     for field, policy in table.items():
         cls = policy["classification"].lower().replace(" ", "_")
         if cls in summary:
@@ -318,7 +363,8 @@ if __name__ == "__main__":
     for table, fields in summary.items():
         pub = len(fields["public"])
         pii = len(fields["pii"])
+        spii = len(fields["spii"])
         sec = len(fields["company_secret"])
-        print(f"  {table}: {pub} public, {pii} PII, {sec} secret")
+        print(f"  {table}: {pub} public, {pii} PII, {spii} SPII, {sec} secret")
 
     print("\n✅ Policy engine ready!")

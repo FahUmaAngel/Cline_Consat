@@ -5,11 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CONSAT Command Center</title>
     <script>
-        window.location.replace("/templates/dashboard.html");
+        const isFile = window.location.protocol === "file:";
+        const target = isFile ? "./templates/dashboard.html" : "/";
+        window.location.replace(target);
     </script>
 </head>
 <body>
     <p>Opening dashboard...</p>
-    <p><a href="/templates/dashboard.html">Continue to dashboard</a></p>
+    <p><a href="./templates/dashboard.html">Continue to dashboard</a></p>
 </body>
 </html>

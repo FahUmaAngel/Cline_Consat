@@ -15,12 +15,12 @@
       "timestamp": 1777926091.8593132,
       "routing": {
         "decision": "cloud",
-        "reason": "ข้อมูล LOW SENSITIVITY -> ส่งไป Cloud LLM สำหรับความเร็ว",
+        "reason": "LOW SENSITIVITY data -> route to Cloud LLM for performance",
         "llm_used": "cloud",
         "sensitivity_level": "low"
       },
       "masking": {
-        "masked_text": "สร้างฟังก์ชัน Python สำหรับคำนวณค่าเฉลี่ยของ list",
+        "masked_text": "Create a Python function to calculate the average of a list",
         "masked_items": {},
         "mapping_id": "mapping_2eafea68"
       },
@@ -42,7 +42,7 @@
       "timestamp": 1777926091.8655088,
       "routing": {
         "decision": "local",
-        "reason": "ข้อมูล HIGH SENSITIVITY -> บังคับใช้ Local LLM สำหรับความปลอดภัย",
+        "reason": "HIGH SENSITIVITY data -> force Local LLM for security",
         "llm_used": "local",
         "sensitivity_level": "high"
       },
@@ -65,12 +65,12 @@
       "timestamp": 1777926091.8695672,
       "routing": {
         "decision": "cloud",
-        "reason": "ข้อมูล LOW SENSITIVITY -> ส่งไป Cloud LLM สำหรับความเร็ว",
+        "reason": "LOW SENSITIVITY data -> route to Cloud LLM for performance",
         "llm_used": "cloud",
         "sensitivity_level": "low"
       },
       "masking": {
-        "masked_text": "ช่วยฉันเชื่อมต่อ database",
+        "masked_text": "Help me connect to the database",
         "masked_items": {},
         "mapping_id": "mapping_e022d02c"
       },
@@ -85,7 +85,7 @@
             "severity": "critical",
             "message": "Hardcoded password found - use environment variables instead",
             "code_snippet": "password=\"MySecret123\"",
-            "recommendation": "Use os.environ.get() หรือ config management"
+            "recommendation": "Use os.environ.get() or a config management tool"
           }
         ]
       },
@@ -101,12 +101,12 @@
       "timestamp": 1777926091.8724306,
       "routing": {
         "decision": "cloud",
-        "reason": "ข้อมูล LOW SENSITIVITY -> ส่งไป Cloud LLM สำหรับความเร็ว",
+        "reason": "LOW SENSITIVITY data -> route to Cloud LLM for performance",
         "llm_used": "cloud",
         "sensitivity_level": "low"
       },
       "masking": {
-        "masked_text": "ช่วยฉันเขียน FastAPI endpoint",
+        "masked_text": "Help me write a FastAPI endpoint",
         "masked_items": {},
         "mapping_id": "mapping_912f2893"
       },

@@ -1,7 +1,7 @@
 """
 Data Masking Engine Prototype
 ==============================
-ปิดบังข้อมูลสำคัญก่อนส่งไปยัง Cloud LLM
+Masks sensitive data before sending to Cloud LLM
 
 Author: CONSAT PoC Team
 Date: May 4, 2026
@@ -14,11 +14,12 @@ from typing import Dict, List, Tuple
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from consat_rules import CONSAT_MASKING_PATTERNS
+import schema_aware_masker
 
 
 @dataclass
 class MaskingRecord:
-    """บันทึกการ mask ข้อมูล"""
+    """Record of a data masking operation"""
     timestamp: str
     original_value: str
     masked_value: str
@@ -26,14 +27,14 @@ class MaskingRecord:
 
 
 class MaskingEngine:
-    """เครื่องมือ mask ข้อมูลสำคัญ"""
-    
+    """Engine for masking sensitive data"""
+
     def __init__(self):
-        """เตรียมการ masking patterns"""
+        """Initialise masking patterns"""
         self.mapping_table: Dict[str, str] = {}  # masked_value -> original_value
         self.records: List[MaskingRecord] = []
-        
-        # Pattern สำหรับ masking
+
+        # Patterns for masking
         self.patterns = {
             'email': {
                 'regex': r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
@@ -76,46 +77,46 @@ class MaskingEngine:
                     'mask_fn': lambda m: f'{{MASKED_CONSAT_{len(self.mapping_table)}}}',
                 },
             )
-    
+
     def mask_text(self, text: str) -> Tuple[str, Dict[str, List[str]]]:
-        """ปิดบังข้อมูลในข้อความ
-        
+        """Mask sensitive data in text
+
         Returns:
-            masked_text: ข้อความหลังจาก mask
+            masked_text: text after masking
             masked_items: dict of pattern_type -> list of masked placeholders
         """
         masked_text = text
         masked_items = {}
-        
+
         # Loop through all patterns
         for pattern_type, pattern_config in self.patterns.items():
             regex = pattern_config['regex']
             matches = list(re.finditer(regex, masked_text, re.IGNORECASE))
-            
+
             if not matches:
                 continue
-            
+
             masked_items[pattern_type] = []
-            
-            # Sort by position (reverse) เพื่อไม่ให้ position เปลี่ยน
+
+            # Sort by position (reverse) so positions don't shift
             for match in reversed(matches):
                 original_value = match.group(0)
-                
-                # สร้าง placeholder ไม่ซ้ำกัน
+
+                # Create a unique placeholder
                 placeholder = f'{{MASKED_{pattern_type.upper()}_{uuid.uuid4().hex[:8]}}}'
-                
-                # เก็บ mapping
+
+                # Store mapping
                 self.mapping_table[placeholder] = original_value
                 masked_items[pattern_type].append(placeholder)
-                
+
                 # Replace in text
                 masked_text = (
-                    masked_text[:match.start()] + 
-                    placeholder + 
+                    masked_text[:match.start()] +
+                    placeholder +
                     masked_text[match.end():]
                 )
-                
-                # บันทึก masking record
+
+                # Record masking entry
                 record = MaskingRecord(
                     timestamp=datetime.now().isoformat(),
                     original_value=original_value,
@@ -123,65 +124,113 @@ class MaskingEngine:
                     pattern_type=pattern_type,
                 )
                 self.records.append(record)
-        
+
         return masked_text, masked_items
-    
+
     def demask_text(self, text: str) -> str:
-        """คืนข้อมูลที่ถูก mask กลับไปเป็นของจริง"""
+        """Restore masked data back to original values"""
         demasked_text = text
-        
-        # Replace ทีละ placeholder
+
+        # Replace each placeholder one by one
         for placeholder, original_value in self.mapping_table.items():
             demasked_text = demasked_text.replace(placeholder, original_value)
-        
+
         return demasked_text
-    
+
     def get_masking_summary(self) -> Dict:
-        """สรุปสถิติการ masking"""
+        """Summarise masking statistics"""
         pattern_counts = {}
         for record in self.records:
             pattern_type = record.pattern_type
             pattern_counts[pattern_type] = pattern_counts.get(pattern_type, 0) + 1
-        
+
         return {
             'total_masked_items': len(self.records),
             'pattern_breakdown': pattern_counts,
             'mapping_table_size': len(self.mapping_table),
         }
-    
+
     def save_mapping_table(self, filepath: str):
-        """บันทึก mapping table สำหรับ de-masking ภายหลัง"""
+        """Save mapping table for later de-masking"""
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(self.mapping_table, f, ensure_ascii=False, indent=2)
-    
+
     def load_mapping_table(self, filepath: str):
-        """โหลด mapping table สำหรับ de-masking"""
+        """Load mapping table for de-masking"""
         with open(filepath, 'r', encoding='utf-8') as f:
             self.mapping_table = json.load(f)
 
 
 class DataMaskingPipeline:
-    """Pipeline รวมการ mask + de-mask"""
-    
+    """Pipeline combining masking and de-masking"""
+
     def __init__(self):
         self.masking_engine = MaskingEngine()
-    
+        self._last_schema_report: Dict = {}
+
     def process_for_cloud(self, text: str) -> Tuple[str, Dict]:
-        """เตรียมข้อมูลสำหรับส่ง Cloud LLM"""
-        masked_text, masked_items = self.masking_engine.mask_text(text)
-        
+        """Prepare text for Cloud LLM — full policy: PII hashed/encrypted, SECRET redacted.
+
+        Two-pass masking:
+          Pass 1 (schema-aware) — scan JSON field names against POLICY_TABLE,
+                                  apply hash / encrypt / redact per column.
+          Pass 2 (regex)        — pattern-based masking for emails, API keys,
+                                  personnummer, etc.
+        """
+        # Pass 1: schema-aware column masking (cloud mode = all actions)
+        schema_masked, schema_report = schema_aware_masker.scan_and_mask(text, mode="cloud")
+        self._last_schema_report = schema_report
+
+        # Pass 2: regex pattern masking on the already-schema-masked text
+        masked_text, masked_items = self.masking_engine.mask_text(schema_masked)
+
         return masked_text, {
             'masked_text': masked_text,
             'masked_items': masked_items,
             'mapping_id': 'mapping_' + uuid.uuid4().hex[:8],
+            'schema_masking': schema_report,
         }
-    
+
+    def process_for_local(self, text: str) -> Tuple[str, Dict]:
+        """Prepare text for Local (on-premise) LLM — PII always masked, SECRET visible.
+
+        Policy:
+          PII (hash/encrypt) → always applied — personal data must never be
+                               readable even by the internal LLM.
+          SECRET (redact)    → skipped — the on-premise LLM is trusted to access
+                               proprietary operational data (eco scores, costs, etc.)
+
+        Two-pass masking:
+          Pass 1 (schema-aware, local mode) — hash/encrypt PII, pass SECRET.
+          Pass 2 (regex, PII-only patterns)  — catch personnummer, driver IDs,
+                                               phone numbers in free text.
+        """
+        # Pass 1: schema-aware PII-only masking
+        schema_masked, schema_report = schema_aware_masker.scan_and_mask(text, mode="local")
+        self._last_schema_report = schema_report
+
+        # Pass 2: regex patterns — run only PII-relevant patterns, skip secret ones
+        # (MaskingEngine already covers emails, phones, personnummer, driver IDs)
+        masked_text, masked_items = self.masking_engine.mask_text(schema_masked)
+
+        return masked_text, {
+            'masked_text': masked_text,
+            'masked_items': masked_items,
+            'mapping_id': 'mapping_' + uuid.uuid4().hex[:8],
+            'schema_masking': schema_report,
+            'mode': 'local',
+        }
+
     def restore_output(self, cloud_output: str) -> str:
-        """คืนค่าข้อมูล หลังจากได้รับ output จาก Cloud"""
+        """Restore data after receiving output from Cloud"""
         return self.masking_engine.demask_text(cloud_output)
-    
+
     def get_summary(self) -> Dict:
-        return self.masking_engine.get_masking_summary()
+        regex_summary = self.masking_engine.get_masking_summary()
+        return {
+            **regex_summary,
+            'schema_masking': self._last_schema_report,
+        }
 
 
 # ============== Test Cases ==============
@@ -190,9 +239,9 @@ if __name__ == "__main__":
     print("=" * 80)
     print("DATA MASKING ENGINE - PROTOTYPE TEST")
     print("=" * 80)
-    
+
     pipeline = DataMaskingPipeline()
-    
+
     test_cases = [
         {
             'name': 'Test 1: API Key + Domain',
@@ -216,30 +265,30 @@ if __name__ == "__main__":
             ''',
         },
     ]
-    
+
     for test in test_cases:
         print(f"\n{test['name']}")
         print("-" * 80)
-        
+
         masked_text, meta = pipeline.process_for_cloud(test['input'])
-        
+
         print(f"Original Input:\n{test['input']}")
         print(f"\nMasked Output:\n{masked_text}")
         print(f"\nMasked Items: {meta['masked_items']}")
-        
+
         # Simulate cloud response (mock output)
         mock_cloud_output = f"Here is the result:\n{masked_text}\nProcessing complete."
         print(f"\nMock Cloud Response:\n{mock_cloud_output}")
-        
+
         # De-mask output
         restored = pipeline.restore_output(mock_cloud_output)
         print(f"\nRestored Output:\n{restored}")
-    
+
     print("\n" + "=" * 80)
     print("MASKING SUMMARY")
     print("=" * 80)
     summary = pipeline.get_summary()
     for key, value in summary.items():
         print(f"{key}: {value}")
-    
+
     print("\n✅ Data masking prototype test complete!")

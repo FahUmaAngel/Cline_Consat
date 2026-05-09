@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CONSAT{% endblock %}</title>
+    {% block meta %}{% endblock %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <link href="/static/css/dashboard.css?v=5" rel="stylesheet">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <div class="app-frame">
+        <aside class="sidebar" aria-label="Dashboard navigation">
+            <div class="brand-lockup">
+                <div class="brand-mark">C</div>
+                <div>
+                    <strong>CONSAT</strong>
+                    <span>Secure AI Gateway</span>
+                </div>
+            </div>
+
+            <nav class="nav-stack">
+                <div class="nav-group-label">Monitoring</div>
+                <a class="nav-item{% if active_page == 'monitor' %} active{% endif %}" href="/"><i class="fa-solid fa-chart-line"></i><span>Monitor</span></a>
+                <a class="nav-item nav-sub" href="/#alerts-panel"><i class="fa-solid fa-shield-halved"></i><span>Guardrails</span></a>
+                <a class="nav-item nav-sub" href="/#history-panel"><i class="fa-solid fa-clock-rotate-left"></i><span>Audit</span></a>
+                <a class="nav-item nav-sub" href="/#userInput"><i class="fa-solid fa-flask"></i><span>Probe</span></a>
+
+                <div class="nav-divider"></div>
+
+                <div class="nav-group-label">Data</div>
+                <a class="nav-item{% if active_page == 'data-explorer' %} active{% endif %}" href="/data-explorer"><i class="fa-solid fa-database"></i><span>Data Explorer</span></a>
+                <a class="nav-item{% if active_page == 'file-vault' %} active{% endif %}" href="/file-vault"><i class="fa-solid fa-folder-tree"></i><span>File Vault</span></a>
+            </nav>
+
+            <div class="sidebar-card">
+                {% block sidebar_card %}{% endblock %}
+            </div>
+        </aside>
+
+        <div class="workspace">
+            {% block workspace %}{% endblock %}
+        </div>
+    </div>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>
