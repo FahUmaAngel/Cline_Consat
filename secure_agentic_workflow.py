@@ -219,13 +219,27 @@ Answer the user's question using only the data above. Be concise and factual."""
             else:
                 # Cloud LLM: receives already-masked prompt text + masked real data
                 masked_context, db_masking_info = self.masking.process_for_cloud(db_context)
-                # Merge db masking counts into masking_info so they're tracked
+                # Merge db masking counts (both regex and schema) into masking_info
                 if masking_info and db_masking_info:
                     for k, v in db_masking_info['masked_items'].items():
                         if k in masking_info['masked_items']:
                             masking_info['masked_items'][k].extend(v)
                         else:
                             masking_info['masked_items'][k] = v
+                    # Merge schema masking reports
+                    db_schema = db_masking_info.get('schema_masking', {})
+                    cur_schema = masking_info.get('schema_masking', {})
+                    merged_events = cur_schema.get('events', []) + db_schema.get('events', [])
+                    masking_info['schema_masking'] = {
+                        'fields_masked': len(merged_events),
+                        'tables_detected': list({e['table'] for e in merged_events}),
+                        'events': merged_events,
+                        'by_action': {
+                            'hash':    [e['field'] for e in merged_events if e['action'] == 'hash'],
+                            'encrypt': [e['field'] for e in merged_events if e['action'] == 'encrypt'],
+                            'redact':  [e['field'] for e in merged_events if e['action'] == 'redact'],
+                        },
+                    }
                 elif db_masking_info:
                     masking_info = db_masking_info
                 enriched_prompt = f"""The user asked: \"{masked_input}\"
@@ -291,6 +305,8 @@ Answer the user's question using only the data above. Be concise and factual."""
             final_status = 'approved'
 
         # ========== Final Result ==========
+        schema_report = (masking_info or {}).get('schema_masking', {})
+
         result = {
             'request_id': f"req_{int(time.time() * 1000)}",
             'user_input': user_input,
@@ -306,6 +322,13 @@ Answer the user's question using only the data above. Be concise and factual."""
                 'detected_patterns': routing_result.get('detected_patterns', []),
             },
             'masking': masking_info,
+            'schema_masking': {
+                'fields_masked': schema_report.get('fields_masked', 0),
+                'tables_detected': schema_report.get('tables_detected', []),
+                'hashed_fields':   (schema_report.get('by_action') or {}).get('hash', []),
+                'encrypted_fields': (schema_report.get('by_action') or {}).get('encrypt', []),
+                'redacted_fields': (schema_report.get('by_action') or {}).get('redact', []),
+            },
             'policy_check': {
                 'approved': approved,
                 'total_violations': policy_result['total_violations'],

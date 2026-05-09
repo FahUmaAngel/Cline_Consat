@@ -14,6 +14,7 @@ from typing import Dict, List, Tuple
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from consat_rules import CONSAT_MASKING_PATTERNS
+import schema_aware_masker
 
 
 @dataclass
@@ -162,26 +163,44 @@ class MaskingEngine:
 
 class DataMaskingPipeline:
     """Pipeline รวมการ mask + de-mask"""
-    
+
     def __init__(self):
         self.masking_engine = MaskingEngine()
-    
+        self._last_schema_report: Dict = {}
+
     def process_for_cloud(self, text: str) -> Tuple[str, Dict]:
-        """เตรียมข้อมูลสำหรับส่ง Cloud LLM"""
-        masked_text, masked_items = self.masking_engine.mask_text(text)
-        
+        """เตรียมข้อมูลสำหรับส่ง Cloud LLM
+
+        Two-pass masking:
+          Pass 1 (schema-aware) — scan JSON field names against POLICY_TABLE
+                                  and apply hash / encrypt / redact per column.
+          Pass 2 (regex)        — apply the existing pattern-based masking on
+                                  top for emails, API keys, personnummer, etc.
+        """
+        # Pass 1: schema-aware column masking
+        schema_masked, schema_report = schema_aware_masker.scan_and_mask(text)
+        self._last_schema_report = schema_report
+
+        # Pass 2: regex pattern masking on the already-schema-masked text
+        masked_text, masked_items = self.masking_engine.mask_text(schema_masked)
+
         return masked_text, {
             'masked_text': masked_text,
             'masked_items': masked_items,
             'mapping_id': 'mapping_' + uuid.uuid4().hex[:8],
+            'schema_masking': schema_report,
         }
-    
+
     def restore_output(self, cloud_output: str) -> str:
         """คืนค่าข้อมูล หลังจากได้รับ output จาก Cloud"""
         return self.masking_engine.demask_text(cloud_output)
-    
+
     def get_summary(self) -> Dict:
-        return self.masking_engine.get_masking_summary()
+        regex_summary = self.masking_engine.get_masking_summary()
+        return {
+            **regex_summary,
+            'schema_masking': self._last_schema_report,
+        }
 
 
 # ============== Test Cases ==============
