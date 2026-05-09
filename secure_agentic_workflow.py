@@ -1,7 +1,7 @@
 """
 Secure Agentic Workflow Orchestrator
 ======================================
-บริหารจัดการและเชื่อมต่อทั้งหมดระบบ Task 4, 5, 6, 7
+Orchestrates and connects all components for Task 4, 5, 6, 7
 
 Author: CONSAT PoC Team
 Date: May 4, 2026
@@ -28,9 +28,9 @@ import json
 
 class SecureAgenticWorkflow:
     """
-    Orchestrator สำหรับ Secure Agentic Workflow
-    
-    รวมทั้งหมด:
+    Orchestrator for the Secure Agentic Workflow.
+
+    Integrates:
     - Task 4: Sensitivity Router
     - Task 5: Data Masking Engine
     - Task 7: Monitoring Dashboard
@@ -454,7 +454,7 @@ if __name__ == "__main__":
     # Test Case 1: Safe Code Query -> Cloud LLM
     print("\n\n📌 TEST CASE 1: Simple Python Function")
     result1 = workflow.process(
-        user_input="สร้างฟังก์ชัน Python สำหรับคำนวณค่าเฉลี่ยของ list",
+        user_input="Create a Python function to calculate the average of a list",
         llm_output="def calculate_average(items):\n    return sum(items) / len(items)"
     )
     print(f"Result: {result1['status'].upper()}")
@@ -462,7 +462,7 @@ if __name__ == "__main__":
     # Test Case 2: Sensitive Code Query -> Local LLM
     print("\n\n📌 TEST CASE 2: Database Connection (SENSITIVE)")
     result2 = workflow.process(
-        user_input="สร้าง API client สำหรับเชื่อมต่อ postgresql://admin:MyPassword@db.internal:5432/users",
+        user_input="Create an API client to connect to postgresql://admin:MyPassword@db.internal:5432/users",
         llm_output="from config import get_db\ndb = get_db()"
     )
     print(f"Result: {result2['status'].upper()}")
@@ -470,7 +470,7 @@ if __name__ == "__main__":
     # Test Case 3: Code with Security Issues
     print("\n\n📌 TEST CASE 3: Code with Hardcoded Password")
     result3 = workflow.process(
-        user_input="ช่วยฉันเชื่อมต่อ database",
+        user_input="Help me connect to the database",
         llm_output='''
 def connect_db():
     conn = mysql.connector.connect(
@@ -487,7 +487,7 @@ def connect_db():
     # Test Case 4: Safe API Code
     print("\n\n📌 TEST CASE 4: Safe API Code")
     result4 = workflow.process(
-        user_input="ช่วยฉันเขียน FastAPI endpoint",
+        user_input="Help me write a FastAPI endpoint",
         llm_output='''
 from fastapi import FastAPI
 from config import get_api_key

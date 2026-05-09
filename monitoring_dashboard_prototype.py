@@ -1,7 +1,7 @@
 """
 Monitoring Dashboard Prototype
 ===============================
-ระบบ Monitoring สำหรับติดตามการ routing, masking, policy enforcement
+Monitoring system for tracking routing, masking, and policy enforcement
 
 Author: CONSAT PoC Team
 Date: May 4, 2026
@@ -17,7 +17,7 @@ from collections import defaultdict
 
 
 class MetricType(Enum):
-    """ประเภทของ metric"""
+    """Metric type"""
     REQUEST_COUNT = "request_count"
     LOCAL_ROUTING_COUNT = "local_routing_count"
     CLOUD_ROUTING_COUNT = "cloud_routing_count"
@@ -29,7 +29,7 @@ class MetricType(Enum):
 
 @dataclass
 class Metric:
-    """บันทึก metric"""
+    """Metric record"""
     timestamp: str
     metric_type: str
     value: float
@@ -38,7 +38,7 @@ class Metric:
 
 @dataclass
 class Alert:
-    """บันทึก alert"""
+    """Alert record"""
     timestamp: str
     severity: str  # info, warning, critical
     message: str
@@ -48,21 +48,21 @@ class Alert:
 
 
 class MetricsCollector:
-    """รวบรวม metrics จากระบบต่าง ๆ"""
-    
+    """Collects metrics from various systems"""
+
     def __init__(self):
         self.metrics: List[Metric] = []
         self.alerts: List[Alert] = []
-        
-        # Thresholds สำหรับสร้าง alert
+
+        # Thresholds for alert creation
         self.alert_thresholds = {
-            'processing_time_ms': 5000,  # เตือน ถ้า > 5 วินาที
-            'error_rate_percent': 5,      # เตือน ถ้า error > 5%
-            'policy_violation_rate': 10,  # เตือน ถ้า violation > 10%
+            'processing_time_ms': 5000,  # alert if > 5 seconds
+            'error_rate_percent': 5,      # alert if error rate > 5%
+            'policy_violation_rate': 10,  # alert if violation rate > 10%
         }
-    
+
     def record_metric(self, metric_type: MetricType, value: float, tags: Dict = None):
-        """บันทึก metric"""
+        """Record a metric"""
         metric = Metric(
             timestamp=datetime.now().isoformat(),
             metric_type=metric_type.value,
@@ -70,12 +70,12 @@ class MetricsCollector:
             tags=tags or {},
         )
         self.metrics.append(metric)
-        
+
         # Check thresholds
         self._check_thresholds(metric_type, value)
-    
+
     def _check_thresholds(self, metric_type: MetricType, value: float):
-        """ตรวจสอบว่าต้องสร้าง alert หรือไม่"""
+        """Check whether an alert should be created"""
         if metric_type == MetricType.PROCESSING_TIME:
             if value > self.alert_thresholds['processing_time_ms']:
                 self._create_alert(
@@ -94,10 +94,10 @@ class MetricsCollector:
                     value=value,
                     threshold=0,
                 )
-    
-    def _create_alert(self, severity: str, message: str, metric_type: str, 
+
+    def _create_alert(self, severity: str, message: str, metric_type: str,
                       value: float, threshold: float):
-        """สร้าง alert"""
+        """Create an alert"""
         alert = Alert(
             timestamp=datetime.now().isoformat(),
             severity=severity,
@@ -107,53 +107,53 @@ class MetricsCollector:
             threshold=threshold,
         )
         self.alerts.append(alert)
-    
+
     def get_all_metrics(self) -> List[Dict]:
-        """ดึง metrics ทั้งหมด"""
+        """Retrieve all metrics"""
         return [asdict(m) for m in self.metrics]
-    
+
     def get_all_alerts(self) -> List[Dict]:
-        """ดึง alerts ทั้งหมด"""
+        """Retrieve all alerts"""
         return [asdict(a) for a in self.alerts]
 
 
 class DashboardCalculator:
-    """คำนวณสถิติสำหรับ dashboard"""
-    
+    """Calculates statistics for the dashboard"""
+
     def __init__(self, metrics_collector: MetricsCollector):
         self.metrics_collector = metrics_collector
-    
+
     def calculate_stats(self) -> Dict:
-        """คำนวณสถิติต่าง ๆ"""
+        """Calculate various statistics"""
         metrics = self.metrics_collector.metrics
-        
+
         if not metrics:
             return self._empty_stats()
-        
+
         # Count by metric type
         metric_counts = defaultdict(int)
         metric_values = defaultdict(list)
-        
+
         for metric in metrics:
             metric_counts[metric.metric_type] += 1
             metric_values[metric.metric_type].append(metric.value)
-        
+
         # Calculate percentages
         total_requests = metric_counts.get('request_count', 0)
         local_routing = metric_counts.get('local_routing_count', 0)
         cloud_routing = metric_counts.get('cloud_routing_count', 0)
-        
+
         local_percent = (local_routing / total_requests * 100) if total_requests > 0 else 0
         cloud_percent = (cloud_routing / total_requests * 100) if total_requests > 0 else 0
-        
+
         # Calculate averages
         avg_processing_time = 0
         if metric_values.get('processing_time'):
             avg_processing_time = sum(metric_values['processing_time']) / len(metric_values['processing_time'])
-        
+
         total_masking_items = sum(metric_values.get('masking_items', []))
         total_policy_violations = sum(metric_values.get('policy_violations', []))
-        
+
         total_violations_all = sum(metric_values.get('policy_violations', []))
         quality_rate = ((total_requests - total_violations_all) / total_requests * 100) if total_requests > 0 else 100.0
 
@@ -175,7 +175,7 @@ class DashboardCalculator:
             # ISO9001: output quality rate (requests without critical policy violations)
             'quality_pass_rate': f"{quality_rate:.1f}%",
         }
-    
+
     def _empty_stats(self) -> Dict:
         return {
             'timestamp': datetime.now().isoformat(),
@@ -196,20 +196,20 @@ class DashboardCalculator:
 
 
 class MonitoringDashboard:
-    """Dashboard หลักสำหรับ monitoring"""
-    
+    """Main monitoring dashboard"""
+
     def __init__(self):
         self.metrics_collector = MetricsCollector()
         self.calculator = DashboardCalculator(self.metrics_collector)
-    
+
     def record_request(self, routing_decision: str, processing_time: float,
                        masked_items: int = 0, policy_violations: int = 0,
                        sensitivity_level: str = '', force_overridden: bool = False):
-        """บันทึก request processing"""
+        """Record request processing"""
         self.metrics_collector.record_metric(
             MetricType.REQUEST_COUNT, 1
         )
-        
+
         if routing_decision == 'local':
             self.metrics_collector.record_metric(
                 MetricType.LOCAL_ROUTING_COUNT, 1,
@@ -220,12 +220,12 @@ class MonitoringDashboard:
                 MetricType.CLOUD_ROUTING_COUNT, 1,
                 tags={'route': 'cloud'}
             )
-        
+
         if masked_items > 0:
             self.metrics_collector.record_metric(
                 MetricType.MASKING_ITEMS, masked_items
             )
-        
+
         if policy_violations > 0:
             self.metrics_collector.record_metric(
                 MetricType.POLICY_VIOLATIONS, policy_violations
@@ -243,26 +243,26 @@ class MonitoringDashboard:
         self.metrics_collector.record_metric(
             MetricType.PROCESSING_TIME, processing_time
         )
-    
+
     def display_dashboard(self):
-        """แสดง dashboard ใน text format"""
+        """Display dashboard in text format"""
         stats = self.calculator.calculate_stats()
-        
+
         print("\n" + "=" * 80)
         print("📊 MONITORING DASHBOARD")
         print("=" * 80)
         print(f"Timestamp: {stats['timestamp']}")
         print("-" * 80)
-        
+
         print("\n📈 REQUEST STATISTICS")
         print(f"  Total Requests: {stats['total_requests']}")
         print(f"  Local Routing: {stats['local_routing_count']} ({stats['local_routing_percent']})")
         print(f"  Cloud Routing: {stats['cloud_routing_count']} ({stats['cloud_routing_percent']})")
-        
+
         print("\n⚙️ PROCESSING")
         print(f"  Avg Processing Time: {stats['avg_processing_time_ms']} ms")
         print(f"  Total Masked Items: {stats['total_masking_items']}")
-        
+
         print("\n🔐 SECURITY & COMPLIANCE (ISO27001)")
         print(f"  Total Policy Violations: {stats['total_policy_violations']}")
         print(f"  Total Alerts: {stats['total_alerts']}")
@@ -274,31 +274,31 @@ class MonitoringDashboard:
 
         print("\n✅ QUALITY METRICS (ISO9001)")
         print(f"  Output Quality Pass Rate: {stats['quality_pass_rate']}  ← requests without critical violations")
-        
+
         # Display recent alerts
         if self.metrics_collector.alerts:
             print("\n⚠️ RECENT ALERTS")
             for alert in self.metrics_collector.alerts[-5:]:  # Show last 5
                 severity_icon = "🔴" if alert.severity == "critical" else "🟡"
                 print(f"  {severity_icon} [{alert.severity.upper()}] {alert.message}")
-        
+
         print("\n" + "=" * 80 + "\n")
-    
+
     def export_metrics_json(self, filepath: str):
-        """Export metrics ไปยัง JSON file"""
+        """Export metrics to a JSON file"""
         data = {
             'dashboard_stats': self.calculator.calculate_stats(),
             'all_metrics': self.metrics_collector.get_all_metrics(),
             'all_alerts': self.metrics_collector.get_all_alerts(),
         }
-        
+
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-    
+
     def get_health_status(self) -> Dict:
-        """ดึง health status ของระบบ"""
+        """Get system health status"""
         stats = self.calculator.calculate_stats()
-        
+
         # Determine health
         if stats['critical_alerts'] > 0:
             health = 'unhealthy'
@@ -306,7 +306,7 @@ class MonitoringDashboard:
             health = 'degraded'
         else:
             health = 'healthy'
-        
+
         return {
             'health': health,
             'stats': stats,
@@ -319,9 +319,9 @@ if __name__ == "__main__":
     print("=" * 80)
     print("MONITORING DASHBOARD - PROTOTYPE TEST")
     print("=" * 80)
-    
+
     dashboard = MonitoringDashboard()
-    
+
     # Simulate some requests
     test_requests = [
         {'route': 'cloud', 'time': 500, 'masked': 2, 'violations': 0},
@@ -332,7 +332,7 @@ if __name__ == "__main__":
         {'route': 'local', 'time': 1800, 'masked': 0, 'violations': 2},  # Will trigger alert
         {'route': 'cloud', 'time': 480, 'masked': 1, 'violations': 0},
     ]
-    
+
     print("\nSimulating requests...")
     for i, req in enumerate(test_requests, 1):
         dashboard.record_request(
@@ -342,14 +342,14 @@ if __name__ == "__main__":
             policy_violations=req['violations'],
         )
         print(f"  Request {i}: {req['route'].upper()} | {req['time']}ms | Masked: {req['masked']} | Violations: {req['violations']}")
-    
+
     # Display dashboard
     dashboard.display_dashboard()
-    
+
     # Health status
     health = dashboard.get_health_status()
     print(f"System Health: {health['health'].upper()}")
-    
+
     # Export metrics
     dashboard.export_metrics_json('monitoring_metrics.json')
     print("✅ Metrics exported to monitoring_metrics.json")
