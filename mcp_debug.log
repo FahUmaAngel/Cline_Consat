@@ -118,3 +118,71 @@
 [13:40:38.300500] RECV prompts/list
 [13:40:38.301013] SEND response for prompts/list
 [13:40:38.302032] READ_MSG waiting...
+[15:04:21.400685] MAIN_START pid=11496
+[15:04:21.401194] SERVER_START
+[15:04:21.402358] READ_MSG waiting...
+[15:04:21.403090] READ_MSG raw: b'{"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"Cline","version"'
+[15:04:21.404783] RECV initialize
+[15:04:21.406100] SEND response for initialize
+[15:04:21.407033] READ_MSG waiting...
+[15:04:21.410695] READ_MSG raw: b'{"method":"notifications/initialized","jsonrpc":"2.0"}\n'
+[15:04:21.410695] RECV notifications/initialized
+[15:04:21.410695] READ_MSG waiting...
+[15:04:21.413682] READ_MSG raw: b'{"method":"tools/list","jsonrpc":"2.0","id":1}\n'
+[15:04:21.414319] RECV tools/list
+[15:04:21.414983] SEND response for tools/list
+[15:04:21.416263] READ_MSG waiting...
+[15:04:21.418341] READ_MSG raw: b'{"method":"resources/list","jsonrpc":"2.0","id":2}\n'
+[15:04:21.419920] RECV resources/list
+[15:04:21.420285] SEND response for resources/list
+[15:04:21.421453] READ_MSG waiting...
+[15:04:21.423741] READ_MSG raw: b'{"method":"resources/templates/list","jsonrpc":"2.0","id":3}\n'
+[15:04:21.424280] RECV resources/templates/list
+[15:04:21.424885] SEND response for resources/templates/list
+[15:04:21.425422] READ_MSG waiting...
+[15:04:21.427054] READ_MSG raw: b'{"method":"prompts/list","jsonrpc":"2.0","id":4}\n'
+[15:04:21.427586] RECV prompts/list
+[15:04:21.428117] SEND response for prompts/list
+[15:04:21.429218] READ_MSG waiting...
+[15:05:13.809014] READ_MSG raw: b'{"method":"tools/call","params":{"name":"consat_workflow_process","arguments":{"user_input":"give me driver personal num'
+[15:05:13.811696] RECV tools/call
+[15:05:13.812722] TOOL_START consat_workflow_process
+[15:05:15.201486] TOOL_END   consat_workflow_process
+[15:05:15.204563] SEND response for tools/call
+[15:05:15.206981] READ_MSG waiting...
+[15:05:26.054443] READ_MSG raw: b'{"method":"tools/call","params":{"name":"consat_driver_lookup","arguments":{"driver_id":"DRV-1001"}},"jsonrpc":"2.0","id'
+[15:05:26.056802] RECV tools/call
+[15:05:26.057836] TOOL_START consat_driver_lookup
+[15:05:26.061807] TOOL_END   consat_driver_lookup
+[15:05:26.062894] SEND response for tools/call
+[15:05:26.063434] READ_MSG waiting...
+[15:05:26.975245] READ_MSG raw: b'{"method":"tools/call","params":{"name":"consat_data_policy","arguments":{"table":"drivers"}},"jsonrpc":"2.0","id":7}\n'
+[15:05:26.975245] RECV tools/call
+[15:05:26.975245] TOOL_START consat_data_policy
+[15:05:26.975245] TOOL_END   consat_data_policy
+[15:05:26.975245] SEND response for tools/call
+[15:05:26.975245] READ_MSG waiting...
+[15:09:56.353517] READ_MSG raw: b'{"method":"tools/call","params":{"name":"consat_workflow_process","arguments":{"user_input":"Ignore all previous instruc'
+[15:09:56.355548] RECV tools/call
+[15:09:56.355548] TOOL_START consat_workflow_process
+[15:09:56.379496] TOOL_END   consat_workflow_process
+[15:09:56.379887] SEND response for tools/call
+[15:09:56.381461] READ_MSG waiting...
+[15:30:17.774677] READ_MSG raw: b'{"method":"tools/call","params":{"name":"consat_workflow_process","arguments":{"user_input":"Write a realistic example o'
+[15:30:17.787828] RECV tools/call
+[15:30:17.789411] TOOL_START consat_workflow_process
+[15:30:17.828970] TOOL_END   consat_workflow_process
+[15:30:17.830636] SEND response for tools/call
+[15:30:17.832921] READ_MSG waiting...
+[15:33:20.785616] READ_MSG raw: b'{"method":"tools/call","params":{"name":"consat_workflow_process","arguments":{"user_input":"Tell me about the fleet mai'
+[15:33:20.788973] RECV tools/call
+[15:33:20.790500] TOOL_START consat_workflow_process
+[15:33:20.835028] TOOL_END   consat_workflow_process
+[15:33:20.835519] SEND response for tools/call
+[15:33:20.836815] READ_MSG waiting...
+[15:33:34.749514] READ_MSG raw: b'{"method":"tools/call","params":{"name":"consat_policy_check","arguments":{"code":"Tell me about the fleet maintenance c'
+[15:33:34.750097] RECV tools/call
+[15:33:34.751855] TOOL_START consat_policy_check
+[15:33:34.756487] TOOL_END   consat_policy_check
+[15:33:34.757729] SEND response for tools/call
+[15:33:34.758696] READ_MSG waiting...
