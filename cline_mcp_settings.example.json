@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "consat-secure-workflow": {
+      "command": "python",
+      "args": [
+        "D:\\Hackathon\\Cline_Consat\\mcp_server.py"
+      ],
+      "disabled": false,
+      "autoApprove": [
+        "consat_route",
+        "consat_mask",
+        "consat_policy_check",
+        "consat_metrics"
+      ]
+    }
+  }
+}

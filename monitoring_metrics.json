@@ -1,0 +1,209 @@
+{
+  "dashboard_stats": {
+    "timestamp": "2026-05-04T22:21:21.893419",
+    "total_requests": 7,
+    "local_routing_count": 2,
+    "cloud_routing_count": 5,
+    "local_routing_percent": "28.6%",
+    "cloud_routing_percent": "71.4%",
+    "avg_processing_time_ms": "1618.57",
+    "total_masking_items": 9,
+    "total_policy_violations": 3,
+    "total_alerts": 1,
+    "critical_alerts": 0
+  },
+  "all_metrics": [
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "request_count",
+      "value": 1,
+      "tags": {}
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "cloud_routing_count",
+      "value": 1,
+      "tags": {
+        "route": "cloud"
+      }
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "masking_items",
+      "value": 2,
+      "tags": {}
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "processing_time",
+      "value": 500,
+      "tags": {}
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "request_count",
+      "value": 1,
+      "tags": {}
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "cloud_routing_count",
+      "value": 1,
+      "tags": {
+        "route": "cloud"
+      }
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "masking_items",
+      "value": 1,
+      "tags": {}
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "processing_time",
+      "value": 450,
+      "tags": {}
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "request_count",
+      "value": 1,
+      "tags": {}
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "local_routing_count",
+      "value": 1,
+      "tags": {
+        "route": "local"
+      }
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "processing_time",
+      "value": 2000,
+      "tags": {}
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "request_count",
+      "value": 1,
+      "tags": {}
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "cloud_routing_count",
+      "value": 1,
+      "tags": {
+        "route": "cloud"
+      }
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "masking_items",
+      "value": 3,
+      "tags": {}
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "policy_violations",
+      "value": 1,
+      "tags": {}
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "processing_time",
+      "value": 600,
+      "tags": {}
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "request_count",
+      "value": 1,
+      "tags": {}
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "cloud_routing_count",
+      "value": 1,
+      "tags": {
+        "route": "cloud"
+      }
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "masking_items",
+      "value": 2,
+      "tags": {}
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "processing_time",
+      "value": 5500,
+      "tags": {}
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "request_count",
+      "value": 1,
+      "tags": {}
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "local_routing_count",
+      "value": 1,
+      "tags": {
+        "route": "local"
+      }
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "policy_violations",
+      "value": 2,
+      "tags": {}
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "processing_time",
+      "value": 1800,
+      "tags": {}
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "request_count",
+      "value": 1,
+      "tags": {}
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "cloud_routing_count",
+      "value": 1,
+      "tags": {
+        "route": "cloud"
+      }
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "masking_items",
+      "value": 1,
+      "tags": {}
+    },
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "metric_type": "processing_time",
+      "value": 480,
+      "tags": {}
+    }
+  ],
+  "all_alerts": [
+    {
+      "timestamp": "2026-05-04T22:21:21.891409",
+      "severity": "warning",
+      "message": "Processing time 5500ms exceeds threshold",
+      "metric_type": "processing_time",
+      "value": 5500,
+      "threshold": 5000
+    }
+  ]
+}
