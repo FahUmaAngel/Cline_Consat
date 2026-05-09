@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CONSAT Data Explorer — Policy Visualization</title>
-    <meta name="description" content="Explore Stockholm bus IoT data with per-column data classification policy badges showing PUBLIC, PII, and COMPANY_SECRET fields.">
+    <title>CONSAT Data Explorer — 4-Tier Policy Visualization</title>
+    <meta name="description" content="Explore Stockholm bus IoT data with per-column data classification policy badges showing PUBLIC, PII, SPII, and COMPANY_SECRET fields across Admin, Internal, and External views.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
     <link href="/static/css/dashboard.css" rel="stylesheet">
-    <link href="/static/css/data-explorer.css?v=2" rel="stylesheet">
+    <link href="/static/css/data-explorer.css?v=3" rel="stylesheet">
 </head>
 <body>
     <div class="app-frame">
@@ -30,8 +30,8 @@
 
             <div class="sidebar-card">
                 <span>Data Policy</span>
-                <strong>3-Tier Classification</strong>
-                <p>PUBLIC → share freely<br>PII → hash/encrypt<br>SECRET → redact completely</p>
+                <strong>4-Tier Classification</strong>
+                <p>PUBLIC → share freely<br>PII → visible internally, masked externally<br>SPII → always masked (never in LLM)<br>SECRET → visible internally, redacted externally</p>
             </div>
         </aside>
 
@@ -43,8 +43,8 @@
                 </div>
                 <div class="status-cluster">
                     <span id="record-count">0 records</span>
-                    <span id="view-indicator" class="view-indicator internal">
-                        <i class="fa-solid fa-building"></i> Internal View — Full Data
+                    <span id="view-indicator" class="view-indicator admin-view">
+                        <i class="fa-solid fa-user-gear"></i> Admin View — All Data
                     </span>
                 </div>
             </header>
@@ -110,21 +110,24 @@
                     </article>
                 </section>
 
-                <!-- View Toggle -->
+                <!-- View Selector — 3-position -->
                 <section class="controls-bar" aria-label="View controls">
-                    <div class="toggle-group">
-                        <span id="label-internal" class="toggle-label active">
+                    <div class="view-selector" role="radiogroup" aria-label="Access level selector">
+                        <button id="btn-admin" class="view-btn active" data-view="admin" type="button">
+                            <i class="fa-solid fa-user-gear"></i> Admin
+                        </button>
+                        <button id="btn-internal" class="view-btn" data-view="internal" type="button">
                             <i class="fa-solid fa-building"></i> Internal
-                        </span>
-                        <div id="view-toggle" class="toggle-switch" role="switch" aria-label="Toggle internal/external view" tabindex="0"></div>
-                        <span id="label-external" class="toggle-label">
-                            <i class="fa-solid fa-handshake"></i> External Partner
-                        </span>
+                        </button>
+                        <button id="btn-external" class="view-btn" data-view="external" type="button">
+                            <i class="fa-solid fa-handshake"></i> External
+                        </button>
                     </div>
                     <div class="policy-legend">
-                        <span><i class="fa-solid fa-lock-open" style="color:#16a34a"></i> PUBLIC — pass</span>
-                        <span><i class="fa-solid fa-user-shield" style="color:#d97706"></i> PII — hash/encrypt</span>
-                        <span><i class="fa-solid fa-ban" style="color:#dc2626"></i> SECRET — redact</span>
+                        <span><i class="fa-solid fa-lock-open" style="color:#16a34a"></i> PUBLIC</span>
+                        <span><i class="fa-solid fa-id-badge" style="color:#2563eb"></i> PII</span>
+                        <span><i class="fa-solid fa-user-shield" style="color:#e04e17"></i> SPII</span>
+                        <span><i class="fa-solid fa-ban" style="color:#dc2626"></i> SECRET</span>
                     </div>
                 </section>
 
@@ -163,6 +166,6 @@
         </div>
     </div>
 
-    <script src="/static/js/data-explorer.js"></script>
+    <script src="/static/js/data-explorer.js?v=3"></script>
 </body>
 </html>

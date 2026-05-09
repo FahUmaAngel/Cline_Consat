@@ -1,6 +1,7 @@
 /**
- * Data Explorer — Policy-Annotated Bus Data Viewer
- * Fetches Stockholm bus data and shows per-column policy badges.
+ * Data Explorer — 4-Tier Policy-Annotated Bus Data Viewer
+ * Supports 3 view modes: Admin / Internal / External
+ * Displays 4-tier classification badges: PUBLIC, PII, SPII, COMPANY_SECRET
  */
 
 (function () {
@@ -8,17 +9,14 @@
 
     // ---- State ----
     let currentTable = "drivers";
-    let currentView = "internal"; // "internal" | "external"
-    let policyData = {};          // field-level policy metadata
+    let currentView = "admin"; // "admin" | "internal" | "external"
+    let policyData = {};
 
     // ---- DOM refs ----
     const tableBody = document.getElementById("table-body");
     const tableHead = document.getElementById("table-head");
     const dataTable = document.getElementById("data-table");
-    const viewToggle = document.getElementById("view-toggle");
     const viewIndicator = document.getElementById("view-indicator");
-    const labelInternal = document.getElementById("label-internal");
-    const labelExternal = document.getElementById("label-external");
     const queryInput = document.getElementById("query-input");
     const classifyBtn = document.getElementById("classify-btn");
     const classResult = document.getElementById("class-result");
@@ -33,8 +31,12 @@
 
         if (cls === "PII") {
             badgeClass = "badge-pii";
-            icon = "fa-user-shield";
+            icon = "fa-id-badge";
             label = `PII · ${action || "hash"}`;
+        } else if (cls === "SPII") {
+            badgeClass = "badge-spii";
+            icon = "fa-user-shield";
+            label = `SPII · ${action || "encrypt"}`;
         } else if (cls === "COMPANY_SECRET") {
             badgeClass = "badge-secret";
             icon = "fa-ban";
@@ -45,10 +47,12 @@
     }
 
     // ---- Cell rendering ----
-    function renderCell(value, field) {
-        if (currentView === "internal") return escapeHtml(String(value));
-
+    function renderCell(value) {
+        if (value === null || value === undefined) return "";
         const str = String(value);
+
+        if (currentView === "admin") return escapeHtml(str);
+
         if (str.startsWith("HASH:")) {
             return `<span class="cell-hashed">${escapeHtml(str)}</span>`;
         }
@@ -113,7 +117,7 @@
             for (const row of rows) {
                 bodyHtml += "<tr>";
                 for (const field of fields) {
-                    bodyHtml += `<td>${renderCell(row[field], field)}</td>`;
+                    bodyHtml += `<td>${renderCell(row[field])}</td>`;
                 }
                 bodyHtml += "</tr>";
             }
@@ -133,26 +137,27 @@
             const data = await res.json();
             const policies = data.policies || {};
             const tables = [
-                { key: "bus_routes",          icon: "fa-route",                  label: "Bus Routes" },
-                { key: "bus_vehicles",         icon: "fa-bus",                    label: "Vehicles" },
-                { key: "drivers",              icon: "fa-id-card",                label: "Drivers" },
-                { key: "iot_sensor_readings",  icon: "fa-satellite-dish",         label: "IoT Readings" },
-                { key: "bus_stops",            icon: "fa-map-pin",                label: "Bus Stops" },
-                { key: "maintenance_logs",     icon: "fa-wrench",                 label: "Maintenance" },
-                { key: "driver_shifts",        icon: "fa-calendar-days",          label: "Shifts" },
-                { key: "incidents",            icon: "fa-triangle-exclamation",   label: "Incidents" },
+                { key: "bus_routes",          label: "Bus Routes" },
+                { key: "bus_vehicles",         label: "Vehicles" },
+                { key: "drivers",              label: "Drivers" },
+                { key: "iot_sensor_readings",  label: "IoT Readings" },
+                { key: "bus_stops",            label: "Bus Stops" },
+                { key: "maintenance_logs",     label: "Maintenance" },
+                { key: "driver_shifts",        label: "Shifts" },
+                { key: "incidents",            label: "Incidents" },
             ];
 
             for (const t of tables) {
                 const card = document.getElementById(`card-${t.key}`);
                 if (!card) continue;
-                const p = policies[t.key] || { public: [], pii: [], company_secret: [] };
+                const p = policies[t.key] || { public: [], pii: [], spii: [], company_secret: [] };
                 const countsEl = card.querySelector(".field-counts");
                 if (countsEl) {
                     countsEl.innerHTML = `
-                        <span class="badge badge-public"><i class="fa-solid fa-lock-open"></i> ${p.public.length} public</span>
-                        <span class="badge badge-pii"><i class="fa-solid fa-user-shield"></i> ${p.pii.length} PII</span>
-                        <span class="badge badge-secret"><i class="fa-solid fa-ban"></i> ${p.company_secret.length} secret</span>
+                        <span class="badge badge-public"><i class="fa-solid fa-lock-open"></i> ${(p.public || []).length} public</span>
+                        <span class="badge badge-pii"><i class="fa-solid fa-id-badge"></i> ${(p.pii || []).length} PII</span>
+                        <span class="badge badge-spii"><i class="fa-solid fa-user-shield"></i> ${(p.spii || []).length} SPII</span>
+                        <span class="badge badge-secret"><i class="fa-solid fa-ban"></i> ${(p.company_secret || []).length} secret</span>
                     `;
                 }
             }
@@ -170,17 +175,35 @@
         loadTable();
     }
 
-    // ---- Toggle view ----
-    function toggleView() {
-        currentView = currentView === "internal" ? "external" : "internal";
-        viewToggle.classList.toggle("external", currentView === "external");
-        labelInternal.classList.toggle("active", currentView === "internal");
-        labelExternal.classList.toggle("active", currentView === "external");
+    // ---- View selector ----
+    const viewConfig = {
+        admin: {
+            cls: "admin-view",
+            html: '<i class="fa-solid fa-user-gear"></i> Admin View — All Data',
+        },
+        internal: {
+            cls: "internal-view",
+            html: '<i class="fa-solid fa-building"></i> Internal View — SPII Masked',
+        },
+        external: {
+            cls: "external-view",
+            html: '<i class="fa-solid fa-handshake"></i> External View — Policy Applied',
+        },
+    };
 
-        viewIndicator.className = "view-indicator " + (currentView === "internal" ? "internal" : "external-view");
-        viewIndicator.innerHTML = currentView === "internal"
-            ? '<i class="fa-solid fa-building"></i> Internal View — Full Data'
-            : '<i class="fa-solid fa-handshake"></i> External Partner View — Policy Applied';
+    function selectView(view) {
+        currentView = view;
+
+        // Update button states
+        document.querySelectorAll(".view-btn").forEach(btn => {
+            btn.classList.toggle("active", btn.dataset.view === view);
+        });
+
+        // Update indicator
+        const cfg = viewConfig[view];
+        viewIndicator.className = "view-indicator " + cfg.cls;
+        viewIndicator.innerHTML = cfg.html;
+
         loadTable();
     }
 
@@ -199,6 +222,7 @@
 
             let badgeClass = "badge-public";
             if (data.classification === "PII") badgeClass = "badge-pii";
+            if (data.classification === "SPII") badgeClass = "badge-spii";
             if (data.classification === "COMPANY_SECRET") badgeClass = "badge-secret";
 
             let html = `
@@ -231,7 +255,9 @@
         });
     });
 
-    viewToggle.addEventListener("click", toggleView);
+    document.querySelectorAll(".view-btn").forEach(btn => {
+        btn.addEventListener("click", () => selectView(btn.dataset.view));
+    });
 
     classifyBtn.addEventListener("click", classifyQuery);
     queryInput.addEventListener("keydown", e => {
@@ -242,7 +268,8 @@
     async function init() {
         await loadPolicy();
         await loadSummaryCards();
-        selectTable("drivers"); // Start with drivers — most interesting for PII demo
+        selectView("admin");
+        selectTable("drivers");
     }
 
     init();
