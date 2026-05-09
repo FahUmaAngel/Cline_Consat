@@ -22,22 +22,27 @@ _DEMO_KEY = b"CONSAT_DEMO_KEY_2026_STOCKHOLM!!"  # 32 bytes for AES-256
 # ============== Policy Table ==============
 POLICY_TABLE = {
     "bus_routes": {
-        "route_id":    {"classification": "PUBLIC", "action": "pass"},
-        "line_number": {"classification": "PUBLIC", "action": "pass"},
-        "line_name":   {"classification": "PUBLIC", "action": "pass"},
-        "operator":    {"classification": "PUBLIC", "action": "pass"},
-        "region":      {"classification": "PUBLIC", "action": "pass"},
+        "route_id":      {"classification": "PUBLIC", "action": "pass"},
+        "line_number":   {"classification": "PUBLIC", "action": "pass"},
+        "line_name":     {"classification": "PUBLIC", "action": "pass"},
+        "operator":      {"classification": "PUBLIC", "action": "pass"},
+        "region":        {"classification": "PUBLIC", "action": "pass"},
+        "frequency_min": {"classification": "PUBLIC", "action": "pass"},
+        "total_stops":   {"classification": "PUBLIC", "action": "pass"},
     },
     "bus_vehicles": {
         "vehicle_id":            {"classification": "PUBLIC",         "action": "pass"},
-        "registration_plate":    {"classification": "PII",            "action": "hash"},
+        "registration_plate":    {"classification": "PII",            "action": "encrypt"},  # encrypt: plate links directly to a legal entity
+        "vehicle_type":          {"classification": "PUBLIC",         "action": "pass"},
+        "capacity":              {"classification": "PUBLIC",         "action": "pass"},
         "iot_device_id":         {"classification": "COMPANY_SECRET", "action": "redact"},
         "firmware_version":      {"classification": "COMPANY_SECRET", "action": "redact"},
         "last_maintenance_date": {"classification": "PUBLIC",         "action": "pass"},
         "assigned_route":        {"classification": "PUBLIC",         "action": "pass"},
+        "status":                {"classification": "PUBLIC",         "action": "pass"},
     },
     "drivers": {
-        "driver_id":              {"classification": "PII",            "action": "hash"},
+        "driver_id":              {"classification": "PUBLIC",         "action": "pass"},   # internal reference ID, not personal data by itself
         "full_name":              {"classification": "PII",            "action": "hash"},
         "personal_number":        {"classification": "PII",            "action": "encrypt"},
         "phone":                  {"classification": "PII",            "action": "hash"},
@@ -48,35 +53,111 @@ POLICY_TABLE = {
         "assigned_vehicle":       {"classification": "PUBLIC",         "action": "pass"},
     },
     "iot_sensor_readings": {
-        "reading_id":               {"classification": "PUBLIC",         "action": "pass"},
-        "vehicle_id":               {"classification": "PUBLIC",         "action": "pass"},
-        "route_id":                 {"classification": "PUBLIC",         "action": "pass"},
-        "timestamp":                {"classification": "PUBLIC",         "action": "pass"},
-        "latitude":                 {"classification": "PUBLIC",         "action": "pass"},
-        "longitude":                {"classification": "PUBLIC",         "action": "pass"},
-        "speed_kmh":                {"classification": "PUBLIC",         "action": "pass"},
-        "passenger_count":          {"classification": "PUBLIC",         "action": "pass"},
-        "door_open_count":          {"classification": "PUBLIC",         "action": "pass"},
+        "reading_id":                {"classification": "PUBLIC",         "action": "pass"},
+        "vehicle_id":                {"classification": "PUBLIC",         "action": "pass"},
+        "route_id":                  {"classification": "PUBLIC",         "action": "pass"},
+        "timestamp":                 {"classification": "PUBLIC",         "action": "pass"},
+        "latitude":                  {"classification": "PII",            "action": "hash"},   # precise GPS + driver_id = location tracking of individuals (GDPR)
+        "longitude":                 {"classification": "PII",            "action": "hash"},
+        "heading_deg":               {"classification": "PUBLIC",         "action": "pass"},
+        "speed_kmh":                 {"classification": "PUBLIC",         "action": "pass"},
+        "passenger_count":           {"classification": "PUBLIC",         "action": "pass"},
+        "door_events":               {"classification": "PUBLIC",         "action": "pass"},
+        "delay_minutes":             {"classification": "PUBLIC",         "action": "pass"},
+        "ac_status":                 {"classification": "PUBLIC",         "action": "pass"},
         "fuel_consumption_l_per_km": {"classification": "COMPANY_SECRET", "action": "redact"},
-        "engine_temp_celsius":      {"classification": "COMPANY_SECRET", "action": "redact"},
-        "brake_wear_pct":           {"classification": "COMPANY_SECRET", "action": "redact"},
-        "driver_id":                {"classification": "PII",            "action": "hash"},
+        "battery_level_pct":         {"classification": "COMPANY_SECRET", "action": "redact"},
+        "engine_temp_celsius":       {"classification": "COMPANY_SECRET", "action": "redact"},
+        "brake_wear_pct":            {"classification": "COMPANY_SECRET", "action": "redact"},
+        "tire_pressure_bar":         {"classification": "COMPANY_SECRET", "action": "redact"},
+        "driver_id":                 {"classification": "PII",            "action": "hash"},
+    },
+    "bus_stops": {
+        "stop_id":               {"classification": "PUBLIC", "action": "pass"},
+        "stop_name":             {"classification": "PUBLIC", "action": "pass"},
+        "latitude":              {"classification": "PUBLIC", "action": "pass"},   # fixed stop coords are public (not personal)
+        "longitude":             {"classification": "PUBLIC", "action": "pass"},
+        "route_ids":             {"classification": "PUBLIC", "action": "pass"},
+        "has_shelter":           {"classification": "PUBLIC", "action": "pass"},
+        "wheelchair_accessible": {"classification": "PUBLIC", "action": "pass"},
+        "real_time_board":       {"classification": "PUBLIC", "action": "pass"},
+    },
+    "maintenance_logs": {
+        "log_id":               {"classification": "PUBLIC",         "action": "pass"},
+        "vehicle_id":           {"classification": "PUBLIC",         "action": "pass"},
+        "date":                 {"classification": "PUBLIC",         "action": "pass"},
+        "maintenance_type":     {"classification": "PUBLIC",         "action": "pass"},
+        "technician_id":        {"classification": "PII",            "action": "hash"},   # person identifier — was wrongly SECRET
+        "technician_name":      {"classification": "PII",            "action": "hash"},
+        "cost_sek":             {"classification": "COMPANY_SECRET", "action": "redact"},
+        "parts_replaced":       {"classification": "COMPANY_SECRET", "action": "redact"},
+        "firmware_updated_to":  {"classification": "COMPANY_SECRET", "action": "redact"},
+        "duration_hours":       {"classification": "PUBLIC",         "action": "pass"},
+        "internal_notes":       {"classification": "COMPANY_SECRET", "action": "redact"},
+    },
+    "driver_shifts": {
+        "shift_id":        {"classification": "PUBLIC",         "action": "pass"},
+        "driver_id":       {"classification": "PII",            "action": "hash"},
+        "vehicle_id":      {"classification": "PUBLIC",         "action": "pass"},
+        "route_id":        {"classification": "PUBLIC",         "action": "pass"},
+        "shift_date":      {"classification": "PUBLIC",         "action": "pass"},
+        "start_time":      {"classification": "PUBLIC",         "action": "pass"},   # schedule data, not personal
+        "end_time":        {"classification": "PUBLIC",         "action": "pass"},
+        "depot":           {"classification": "PUBLIC",         "action": "pass"},   # operational facility, not a secret
+        "break_location":  {"classification": "PII",            "action": "hash"},   # tracks personal movement
+        "overtime_hours":  {"classification": "COMPANY_SECRET", "action": "redact"},
+    },
+    "incidents": {
+        "incident_id":           {"classification": "PUBLIC",         "action": "pass"},
+        "type":                  {"classification": "PUBLIC",         "action": "pass"},
+        "severity":              {"classification": "PUBLIC",         "action": "pass"},
+        "vehicle_id":            {"classification": "PUBLIC",         "action": "pass"},
+        "driver_id":             {"classification": "PII",            "action": "hash"},
+        "route_id":              {"classification": "PUBLIC",         "action": "pass"},
+        "timestamp":             {"classification": "PUBLIC",         "action": "pass"},
+        "latitude":              {"classification": "PII",            "action": "hash"},   # incident location tied to driver
+        "longitude":             {"classification": "PII",            "action": "hash"},
+        "description":           {"classification": "COMPANY_SECRET", "action": "redact"},
+        "status":                {"classification": "PUBLIC",         "action": "pass"},
+        "reported_to_authority": {"classification": "PUBLIC",         "action": "pass"},
     },
 }
 
 # Keywords that indicate queries touching sensitive data
 SECRET_KEYWORDS = [
-    "eco_drive", "eco-drive", "ecodrive", "fuel_consumption", "fuel consumption",
+    # eco / performance scores (proprietary algorithm output)
+    "eco_drive", "eco-drive", "ecodrive", "eco score", "eco-score", "eco drive score",
+    "fuel_consumption", "fuel consumption", "fuel efficiency",
+    # vehicle health telemetry
     "brake_wear", "brake wear", "engine_temp", "engine temperature",
+    "battery_level", "tire_pressure",
+    # CONSAT proprietary systems
     "firmware", "iot_device_id", "consat-iot", "consat_iot",
-    "training_certification", "consat-cert", "internal cost",
+    "training_certification", "consat-cert",
+    # financial / commercial
+    "cost_sek", "maintenance cost", "internal cost", "salary", "wage",
+    "pay", "compensation", "lön", "overtime",
+    # supply chain & internal docs
+    "parts_replaced", "internal_notes", "internal notes",
+    "incident description",
     "proprietary", "confidential",
 ]
 
 PII_KEYWORDS = [
+    # field name variants
     "driver_name", "full_name", "personal_number", "personnummer",
-    "license_number", "driver phone", "driver email", "driver_id",
-    "registration_plate", "phone", "email",
+    "license_number", "registration_plate", "technician_name", "technician_id",
+    "break_location",
+    # natural-language variants
+    "personal number", "full name", "license number", "driver name",
+    "driver phone", "driver email", "driver id",
+    "registration plate", "phone number", "phone", "email",
+    "who is driving", "driver schedule", "shift",
+    # location tracking (GPS linked to a person = PII under GDPR)
+    "latitude", "longitude", "gps", "coordinates", "location of driver",
+    "driver location", "vehicle location",
+    # Swedish
+    "personnummer", "körkort",
 ]
 
 

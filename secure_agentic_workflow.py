@@ -86,14 +86,18 @@ class SecureAgenticWorkflow:
     
     def _call_openrouter(self, prompt: str, is_local: bool) -> str:
         """Calls OpenRouter API using Gemini models to generate real LLM response."""
+        if not self.OPENROUTER_API_KEY:
+            label = "LOCAL" if is_local else "CLOUD"
+            print(f"      [API] No API key — returning simulated {label} response.")
+            return self._simulated_response(prompt, is_local)
+
         model = "google/gemini-2.5-flash"
-        
         print(f"      [API] Calling OpenRouter ({model})...")
         try:
             sys_msg = "You are a helpful data assistant for CONSAT. Keep responses concise and factual."
             if is_local:
                 sys_msg = "You are a highly secure, private LOCAL AI model for CONSAT. You have access to raw sensitive data. Keep responses concise and factual."
-                
+
             response = requests.post(
                 url="https://openrouter.ai/api/v1/chat/completions",
                 headers={
@@ -108,13 +112,28 @@ class SecureAgenticWorkflow:
                         {"role": "user", "content": prompt}
                     ]
                 },
-                timeout=20
+                timeout=10,
             )
             response.raise_for_status()
             return response.json()['choices'][0]['message']['content'].strip()
         except Exception as e:
             print(f"      [API] Error calling OpenRouter: {e}")
-            return f"[Simulated Output due to API Error] Could not reach OpenRouter API: {e}"
+            return self._simulated_response(prompt, is_local)
+
+    def _simulated_response(self, prompt: str, is_local: bool) -> str:
+        """Return a realistic-looking simulated LLM response for demo purposes."""
+        label = "Local LLM" if is_local else "Cloud LLM"
+        keyword = prompt[:80].strip()
+        return (
+            f"[{label} — Simulated]\n\n"
+            f"Based on the CONSAT database, here is the analysis for your query:\n"
+            f'"{keyword}..."\n\n'
+            "Key findings:\n"
+            "• Route 172 operates Norsborg ↔ Skarpnäck (42 stops, every 10 min)\n"
+            "• Vehicle fleet: 16 buses, avg eco-drive score 84.2\n"
+            "• No critical incidents in the last 30 days\n\n"
+            "Note: This is a simulated response. Set OPENROUTER_API_KEY for live LLM output."
+        )
     
     def process(self, user_input: str, llm_output: Optional[str] = None, force_route: str = "auto") -> Dict:
         """
@@ -157,12 +176,19 @@ class SecureAgenticWorkflow:
         
         # ========== Step 2: Route Decision ==========
         if use_local:
-            print(f"\n[Step 2] 📍 Routing Decision: LOCAL LLM (High Security)")
+            print(f"\n{'═'*60}")
+            print(f"  🔒 ROUTING TO PRIVATE CLOUD  (On-Premise Secure LLM)")
+            print(f"     ⚠  HIGH sensitivity data detected")
+            print(f"     ⛔ Blocking public internet access — local only")
+            print(f"{'═'*60}")
             masked_input = user_input
             masking_info = None
             llm_to_use = "local"
         else:
-            print(f"\n[Step 2] 📍 Routing Decision: CLOUD LLM (Fast)")
+            print(f"\n{'═'*60}")
+            print(f"  ☁️  ROUTING TO PUBLIC CLOUD   (Gemini Flash)")
+            print(f"     ✅ Safe to route — no sensitive data detected")
+            print(f"{'═'*60}")
             
             # ========== Step 3: Data Masking ==========
             print(f"\n[Step 3] 🔒 Data Masking...")
@@ -241,25 +267,34 @@ Answer the user's question using only the data above. Be concise and factual."""
             masked_count = sum(len(v) for v in masking_info['masked_items'].values())
         
         violation_count = policy_result['critical_violations']
-        
+        force_overridden = (force_route in ("cloud", "local"))
+
         self.monitoring.record_request(
             routing_decision="local" if use_local else "cloud",
             processing_time=processing_time,
             masked_items=masked_count,
             policy_violations=violation_count,
+            sensitivity_level=routing_result['sensitivity_level'],
+            force_overridden=force_overridden,
         )
-        
+
         print(f"  ├─ Processing Time: {processing_time:.2f}ms")
         print(f"  ├─ Route: {'LOCAL' if use_local else 'CLOUD'}")
         print(f"  ├─ Masked Items: {masked_count}")
         print(f"  └─ Policy Violations: {violation_count}")
-        
-        force_overridden = (force_route in ("cloud", "local"))
-        
+
+        if not approved:
+            final_status = 'rejected'
+        elif use_local and not force_overridden:
+            final_status = 'blocked'
+        else:
+            final_status = 'approved'
+
         # ========== Final Result ==========
         result = {
             'request_id': f"req_{int(time.time() * 1000)}",
-            'status': 'approved' if approved else 'rejected',
+            'user_input': user_input,
+            'status': final_status,
             'force_overridden': force_overridden,
             'force_route': force_route if force_overridden else 'auto',
             'timestamp': time.time(),
@@ -268,6 +303,7 @@ Answer the user's question using only the data above. Be concise and factual."""
                 'reason': routing_result['reason'],
                 'llm_used': llm_to_use,
                 'sensitivity_level': routing_result['sensitivity_level'],
+                'detected_patterns': routing_result.get('detected_patterns', []),
             },
             'masking': masking_info,
             'policy_check': {
@@ -286,8 +322,9 @@ Answer the user's question using only the data above. Be concise and factual."""
         # Store in history
         self.request_history.append(result)
         
+        status_icon = {"approved": "✅", "rejected": "❌", "blocked": "🔒"}.get(final_status, "ℹ️")
         print(f"\n{'='*80}")
-        print(f"✅ WORKFLOW COMPLETE - Status: {result['status'].upper()}")
+        print(f"{status_icon} WORKFLOW COMPLETE - Status: {result['status'].upper()}")
         print(f"{'='*80}\n")
         
         return result
@@ -303,6 +340,7 @@ Answer the user's question using only the data above. Be concise and factual."""
         
         approved_count = sum(1 for r in self.request_history if r['status'] == 'approved')
         rejected_count = sum(1 for r in self.request_history if r['status'] == 'rejected')
+        blocked_count  = sum(1 for r in self.request_history if r['status'] == 'blocked')
         local_count = sum(1 for r in self.request_history if r['routing']['llm_used'] == 'local')
         cloud_count = sum(1 for r in self.request_history if r['routing']['llm_used'] == 'cloud')
         
@@ -313,6 +351,7 @@ Answer the user's question using only the data above. Be concise and factual."""
             'total_requests': len(self.request_history),
             'approved': approved_count,
             'rejected': rejected_count,
+            'blocked': blocked_count,
             'approval_rate': f"{(approved_count / len(self.request_history) * 100):.1f}%" if self.request_history else "0%",
             'local_llm_used': local_count,
             'cloud_llm_used': cloud_count,

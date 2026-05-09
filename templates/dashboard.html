@@ -4,9 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CONSAT Command Center</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="/static/css/dashboard.css" rel="stylesheet">
+    <link href="/static/css/dashboard.css?v=3" rel="stylesheet">
 </head>
 <body>
     <div class="app-frame">
@@ -161,7 +164,7 @@
                         <textarea id="userInput" rows="4">What is the standard bus route for line 172 in Stockholm?</textarea>
                         
                         <label for="routeOverride" style="margin-top: 12px;">LLM Routing Override</label>
-                        <select id="routeOverride" class="text-input" style="width: 100%; margin-bottom: 12px; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background-color: var(--surface);">
+                        <select id="routeOverride">
                             <option value="auto">Auto (Sensitivity Router)</option>
                             <option value="cloud">Force Cloud LLM (Gemini)</option>
                             <option value="local">Force Local LLM (Gemini)</option>
@@ -173,7 +176,14 @@
                         <p id="simulation-result" class="result-line">Ready</p>
                         
                         <label>LLM output</label>
-                        <div id="llmOutput" style="min-height: 100px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #f8fafc; color: var(--ink); font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 13px; white-space: pre-wrap; word-break: break-word; overflow-y: auto; max-height: 250px;"></div>
+                        <div id="llmOutput"></div>
+
+                        <details id="log-details" style="display:none;margin-top:12px;">
+                            <summary style="font-size:12px;font-weight:700;color:#64748b;cursor:pointer;user-select:none;">
+                                <i class="fa-solid fa-terminal" style="margin-right:4px;"></i> Workflow log
+                            </summary>
+                            <pre id="workflowLog" class="workflow-log"></pre>
+                        </details>
                     </aside>
 
                     <div class="panel alerts-panel">
@@ -204,6 +214,6 @@
         </div>
     </div>
 
-    <script src="/static/js/dashboard.js?v=2"></script>
+    <script src="/static/js/dashboard.js?v=3"></script>
 </body>
 </html>
