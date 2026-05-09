@@ -174,22 +174,22 @@ def _payload(history_limit: int = 20):
 @app.get("/", response_class=HTMLResponse)
 async def get_dashboard(request: Request):
     """Serve main dashboard page"""
-    return templates.TemplateResponse("dashboard.html", {"request": request})
+    return templates.TemplateResponse("dashboard.html", {"request": request, "active_page": "monitor"})
 
 @app.get("/dashboard.html", response_class=HTMLResponse)
 async def get_dashboard_html(request: Request):
     """Serve dashboard page when opened by its file-like URL."""
-    return templates.TemplateResponse("dashboard.html", {"request": request})
+    return templates.TemplateResponse("dashboard.html", {"request": request, "active_page": "monitor"})
 
 @app.get("/data-explorer", response_class=HTMLResponse)
 async def get_data_explorer(request: Request):
     """Serve data explorer page."""
-    return templates.TemplateResponse("data-explorer.html", {"request": request})
+    return templates.TemplateResponse("data-explorer.html", {"request": request, "active_page": "data-explorer"})
 
 @app.get("/file-vault", response_class=HTMLResponse)
 async def get_file_vault(request: Request):
     """Serve file vault page."""
-    return templates.TemplateResponse("file-vault.html", {"request": request})
+    return templates.TemplateResponse("file-vault.html", {"request": request, "active_page": "file-vault"})
 
 # ── File Vault API ──────────────────────────────────────────────
 

@@ -1,286 +1,265 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CONSAT File Vault — Secure Tiered File Management</title>
-    <meta name="description" content="Upload and manage files with automatic 4-tier sensitivity classification. Think Google Drive with enterprise data policy enforcement.">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
-    <link href="/static/css/dashboard.css" rel="stylesheet">
-    <link href="/static/css/file-vault.css?v=1" rel="stylesheet">
-</head>
-<body>
-    <div class="app-frame">
-        <aside class="sidebar" aria-label="Dashboard navigation">
-            <div class="brand-lockup">
-                <div class="brand-mark">C</div>
+{% extends "base.html" %}
+
+{% block title %}CONSAT File Vault — Secure Tiered File Management{% endblock %}
+
+{% block meta %}
+<meta name="description" content="Upload and manage files with automatic 4-tier sensitivity classification. Think Google Drive with enterprise data policy enforcement.">
+{% endblock %}
+
+{% block extra_head %}
+<link href="/static/css/file-vault.css?v=1" rel="stylesheet">
+{% endblock %}
+
+{% block sidebar_card %}
+<span>Access Tiers</span>
+<strong>4-Tier Classification</strong>
+<p>PUBLIC → visible to all<br>PII → hash for external<br>SPII → always masked<br>SECRET → redacted externally</p>
+{% endblock %}
+
+{% block workspace %}
+<header class="topbar">
+    <div>
+        <p class="eyebrow">Secure Document Management</p>
+        <h1>File Vault</h1>
+    </div>
+    <div class="status-cluster">
+        <span id="file-count">0 files</span>
+        <span id="view-indicator" class="view-indicator internal">
+            <i class="fa-solid fa-user-tie"></i> Admin View — Full Access
+        </span>
+    </div>
+</header>
+
+<main class="vault-shell">
+
+    <!-- ── Tier Stats ────────────────────────────────── -->
+    <section class="tier-stats" aria-label="File statistics by tier">
+        <article class="tier-card" data-tier="ALL">
+            <div class="tier-card-top">
+                <div class="tier-icon tier-all"><i class="fa-solid fa-layer-group"></i></div>
                 <div>
-                    <strong>CONSAT</strong>
-                    <span>Secure AI Gateway</span>
+                    <span class="tier-label">All Files</span>
+                    <strong id="stat-total" class="tier-count">0</strong>
                 </div>
             </div>
-
-            <nav class="nav-stack">
-                <a class="nav-item" href="/"><i class="fa-solid fa-chart-line"></i><span>Monitor</span></a>
-                <a class="nav-item" href="/data-explorer"><i class="fa-solid fa-database"></i><span>Data Explorer</span></a>
-                <a class="nav-item active" href="/file-vault"><i class="fa-solid fa-folder-tree"></i><span>File Vault</span></a>
-            </nav>
-
-            <div class="sidebar-card">
-                <span>Access Tiers</span>
-                <strong>4-Tier Classification</strong>
-                <p>PUBLIC → visible to all<br>PII → hash for external<br>SPII → always masked<br>SECRET → redacted externally</p>
-            </div>
-        </aside>
-
-        <div class="workspace">
-            <header class="topbar">
+            <div class="tier-size" id="stat-total-size">0 B</div>
+        </article>
+        <article class="tier-card active" data-tier="PUBLIC">
+            <div class="tier-card-top">
+                <div class="tier-icon tier-public"><i class="fa-solid fa-lock-open"></i></div>
                 <div>
-                    <p class="eyebrow">Secure Document Management</p>
-                    <h1>File Vault</h1>
+                    <span class="tier-label">Public</span>
+                    <strong id="stat-public" class="tier-count">0</strong>
                 </div>
-                <div class="status-cluster">
-                    <span id="file-count">0 files</span>
-                    <span id="view-indicator" class="view-indicator internal">
-                        <i class="fa-solid fa-user-tie"></i> Admin View — Full Access
-                    </span>
+            </div>
+            <div class="tier-size" id="stat-public-size">0 B</div>
+        </article>
+        <article class="tier-card" data-tier="PII">
+            <div class="tier-card-top">
+                <div class="tier-icon tier-pii"><i class="fa-solid fa-user-shield"></i></div>
+                <div>
+                    <span class="tier-label">PII</span>
+                    <strong id="stat-pii" class="tier-count">0</strong>
                 </div>
-            </header>
-
-            <main class="vault-shell">
-
-                <!-- ── Tier Stats ────────────────────────────────── -->
-                <section class="tier-stats" aria-label="File statistics by tier">
-                    <article class="tier-card" data-tier="ALL">
-                        <div class="tier-card-top">
-                            <div class="tier-icon tier-all"><i class="fa-solid fa-layer-group"></i></div>
-                            <div>
-                                <span class="tier-label">All Files</span>
-                                <strong id="stat-total" class="tier-count">0</strong>
-                            </div>
-                        </div>
-                        <div class="tier-size" id="stat-total-size">0 B</div>
-                    </article>
-                    <article class="tier-card active" data-tier="PUBLIC">
-                        <div class="tier-card-top">
-                            <div class="tier-icon tier-public"><i class="fa-solid fa-lock-open"></i></div>
-                            <div>
-                                <span class="tier-label">Public</span>
-                                <strong id="stat-public" class="tier-count">0</strong>
-                            </div>
-                        </div>
-                        <div class="tier-size" id="stat-public-size">0 B</div>
-                    </article>
-                    <article class="tier-card" data-tier="PII">
-                        <div class="tier-card-top">
-                            <div class="tier-icon tier-pii"><i class="fa-solid fa-user-shield"></i></div>
-                            <div>
-                                <span class="tier-label">PII</span>
-                                <strong id="stat-pii" class="tier-count">0</strong>
-                            </div>
-                        </div>
-                        <div class="tier-size" id="stat-pii-size">0 B</div>
-                    </article>
-                    <article class="tier-card" data-tier="SPII">
-                        <div class="tier-card-top">
-                            <div class="tier-icon tier-spii"><i class="fa-solid fa-shield-halved"></i></div>
-                            <div>
-                                <span class="tier-label">Sensitive PII</span>
-                                <strong id="stat-spii" class="tier-count">0</strong>
-                            </div>
-                        </div>
-                        <div class="tier-size" id="stat-spii-size">0 B</div>
-                    </article>
-                    <article class="tier-card" data-tier="SECRET">
-                        <div class="tier-card-top">
-                            <div class="tier-icon tier-secret"><i class="fa-solid fa-ban"></i></div>
-                            <div>
-                                <span class="tier-label">Secret</span>
-                                <strong id="stat-secret" class="tier-count">0</strong>
-                            </div>
-                        </div>
-                        <div class="tier-size" id="stat-secret-size">0 B</div>
-                    </article>
-                </section>
-
-                <!-- ── Tier Matrix ──────────────────────────────── -->
-                <section class="tier-matrix-panel" aria-label="Access control matrix">
-                    <div class="panel-header">
-                        <div>
-                            <p class="eyebrow">Access Policy</p>
-                            <h2>Tier Access Matrix</h2>
-                        </div>
-                    </div>
-                    <div class="matrix-scroll">
-                        <table class="tier-matrix">
-                            <thead>
-                                <tr>
-                                    <th>Tier</th>
-                                    <th><i class="fa-solid fa-user-tie"></i> Admin <small>(see all)</small></th>
-                                    <th><i class="fa-solid fa-server"></i> Internal <small>(Local LLM)</small></th>
-                                    <th><i class="fa-solid fa-cloud"></i> External <small>(Cloud LLM)</small></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td><span class="badge badge-public"><i class="fa-solid fa-lock-open"></i> PUBLIC</span></td>
-                                    <td><span class="access-visible">✅</span></td>
-                                    <td><span class="access-visible">✅</span></td>
-                                    <td><span class="access-visible">✅</span></td>
-                                </tr>
-                                <tr>
-                                    <td><span class="badge badge-pii"><i class="fa-solid fa-user-shield"></i> PII</span></td>
-                                    <td><span class="access-visible">✅</span></td>
-                                    <td><span class="access-visible">✅ visible</span></td>
-                                    <td><span class="access-hash">🔒 hash/encrypt</span></td>
-                                </tr>
-                                <tr>
-                                    <td><span class="badge badge-spii"><i class="fa-solid fa-shield-halved"></i> SPII</span></td>
-                                    <td><span class="access-visible">✅</span></td>
-                                    <td><span class="access-masked">🔒 always masked</span></td>
-                                    <td><span class="access-masked">🔒 always masked</span></td>
-                                </tr>
-                                <tr>
-                                    <td><span class="badge badge-secret"><i class="fa-solid fa-ban"></i> SECRET</span></td>
-                                    <td><span class="access-visible">✅</span></td>
-                                    <td><span class="access-visible">✅ visible</span></td>
-                                    <td><span class="access-redacted">🔴 redacted</span></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
-
-                <!-- ── Controls Bar ─────────────────────────────── -->
-                <section class="controls-bar" aria-label="View and upload controls">
-                    <div class="controls-left">
-                        <div class="search-box">
-                            <i class="fa-solid fa-search"></i>
-                            <input id="search-input" type="text" placeholder="Search files…" />
-                        </div>
-                        <div class="toggle-group">
-                            <span id="label-admin" class="toggle-label active">
-                                <i class="fa-solid fa-user-tie"></i> Admin
-                            </span>
-                            <div id="view-toggle-1" class="view-toggle-btn" data-view="internal" title="Switch to Internal view">
-                                <i class="fa-solid fa-server"></i> Internal
-                            </div>
-                            <div id="view-toggle-2" class="view-toggle-btn" data-view="external" title="Switch to External view">
-                                <i class="fa-solid fa-cloud"></i> External
-                            </div>
-                        </div>
-                    </div>
-                    <button id="upload-btn" class="upload-button" type="button">
-                        <i class="fa-solid fa-cloud-arrow-up"></i> Upload Files
-                    </button>
-                </section>
-
-                <!-- ── Upload Modal ─────────────────────────────── -->
-                <div id="upload-modal" class="modal-overlay" style="display:none;">
-                    <div class="modal-card">
-                        <div class="modal-header">
-                            <h2><i class="fa-solid fa-cloud-arrow-up"></i> Upload to Vault</h2>
-                            <button id="modal-close" class="icon-button" type="button"><i class="fa-solid fa-xmark"></i></button>
-                        </div>
-                        <div class="drop-zone" id="drop-zone">
-                            <i class="fa-solid fa-file-arrow-up"></i>
-                            <p>Drag & drop files here, or <span class="browse-link">browse</span></p>
-                            <small>PDF, TXT, CSV, images, and more</small>
-                            <input id="file-input" type="file" multiple style="display:none;" />
-                        </div>
-                        <div id="upload-queue" class="upload-queue"></div>
-                        <div class="modal-fields">
-                            <div class="field-row">
-                                <label for="upload-tier">Sensitivity Tier</label>
-                                <select id="upload-tier">
-                                    <option value="">Auto-detect</option>
-                                    <option value="PUBLIC">PUBLIC — Safe to share</option>
-                                    <option value="PII">PII — Personal data</option>
-                                    <option value="SPII">SPII — Sensitive personal data</option>
-                                    <option value="SECRET">SECRET — Company secret</option>
-                                </select>
-                            </div>
-                            <div class="field-row">
-                                <label for="upload-tags">Tags <small>(comma-separated)</small></label>
-                                <input id="upload-tags" type="text" placeholder="e.g. driver, report, Q2" />
-                            </div>
-                            <div class="field-row">
-                                <label for="upload-desc">Description</label>
-                                <input id="upload-desc" type="text" placeholder="Optional description" />
-                            </div>
-                        </div>
-                        <button id="submit-upload" class="primary-button" type="button" disabled>
-                            <i class="fa-solid fa-upload"></i> Upload
-                        </button>
-                    </div>
+            </div>
+            <div class="tier-size" id="stat-pii-size">0 B</div>
+        </article>
+        <article class="tier-card" data-tier="SPII">
+            <div class="tier-card-top">
+                <div class="tier-icon tier-spii"><i class="fa-solid fa-shield-halved"></i></div>
+                <div>
+                    <span class="tier-label">Sensitive PII</span>
+                    <strong id="stat-spii" class="tier-count">0</strong>
                 </div>
-
-                <!-- ── File Grid / List ─────────────────────────── -->
-                <section class="file-grid-section">
-                    <div class="file-grid-header">
-                        <div>
-                            <p class="eyebrow">Your Files</p>
-                            <h2 id="files-heading">All Files</h2>
-                        </div>
-                        <div class="view-mode-group">
-                            <button id="view-grid" class="icon-button active" title="Grid view" type="button"><i class="fa-solid fa-grip"></i></button>
-                            <button id="view-list" class="icon-button" title="List view" type="button"><i class="fa-solid fa-list"></i></button>
-                        </div>
-                    </div>
-                    <div id="file-container" class="file-grid">
-                        <div class="empty-vault">
-                            <i class="fa-solid fa-cloud-arrow-up"></i>
-                            <h3>Your vault is empty</h3>
-                            <p>Upload files to get started. Each file will be automatically classified into the appropriate security tier.</p>
-                            <button class="primary-button trigger-upload" type="button"><i class="fa-solid fa-plus"></i> Upload your first file</button>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- ── File Detail Modal ────────────────────────── -->
-                <div id="detail-modal" class="modal-overlay" style="display:none;">
-                    <div class="modal-card detail-card">
-                        <div class="modal-header">
-                            <h2 id="detail-filename"><i class="fa-solid fa-file"></i> File Details</h2>
-                            <button id="detail-close" class="icon-button" type="button"><i class="fa-solid fa-xmark"></i></button>
-                        </div>
-                        <div class="detail-body">
-                            <div class="detail-meta">
-                                <div class="detail-row"><span>File ID</span><strong id="detail-id"></strong></div>
-                                <div class="detail-row"><span>Tier</span><div id="detail-tier-badge"></div></div>
-                                <div class="detail-row"><span>Size</span><strong id="detail-size"></strong></div>
-                                <div class="detail-row"><span>Type</span><strong id="detail-type"></strong></div>
-                                <div class="detail-row"><span>Uploaded</span><strong id="detail-date"></strong></div>
-                                <div class="detail-row"><span>Downloads</span><strong id="detail-downloads"></strong></div>
-                                <div class="detail-row"><span>SHA-256</span><code id="detail-hash"></code></div>
-                            </div>
-                            <div class="detail-actions-section">
-                                <div class="detail-tier-edit">
-                                    <label for="detail-tier-select">Change Tier</label>
-                                    <select id="detail-tier-select">
-                                        <option value="PUBLIC">PUBLIC</option>
-                                        <option value="PII">PII</option>
-                                        <option value="SPII">SPII</option>
-                                        <option value="SECRET">SECRET</option>
-                                    </select>
-                                </div>
-                                <div class="detail-buttons">
-                                    <button id="detail-download" class="action-btn download-btn" type="button"><i class="fa-solid fa-download"></i> Download</button>
-                                    <button id="detail-star" class="action-btn star-btn" type="button"><i class="fa-regular fa-star"></i> Star</button>
-                                    <button id="detail-delete" class="action-btn delete-btn" type="button"><i class="fa-solid fa-trash"></i> Delete</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+            </div>
+            <div class="tier-size" id="stat-spii-size">0 B</div>
+        </article>
+        <article class="tier-card" data-tier="SECRET">
+            <div class="tier-card-top">
+                <div class="tier-icon tier-secret"><i class="fa-solid fa-ban"></i></div>
+                <div>
+                    <span class="tier-label">Secret</span>
+                    <strong id="stat-secret" class="tier-count">0</strong>
                 </div>
+            </div>
+            <div class="tier-size" id="stat-secret-size">0 B</div>
+        </article>
+    </section>
 
-            </main>
+    <!-- ── Tier Matrix ──────────────────────────────── -->
+    <section class="tier-matrix-panel" aria-label="Access control matrix">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Access Policy</p>
+                <h2>Tier Access Matrix</h2>
+            </div>
+        </div>
+        <div class="matrix-scroll">
+            <table class="tier-matrix">
+                <thead>
+                    <tr>
+                        <th>Tier</th>
+                        <th><i class="fa-solid fa-user-tie"></i> Admin <small>(see all)</small></th>
+                        <th><i class="fa-solid fa-server"></i> Internal <small>(Local LLM)</small></th>
+                        <th><i class="fa-solid fa-cloud"></i> External <small>(Cloud LLM)</small></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge badge-public"><i class="fa-solid fa-lock-open"></i> PUBLIC</span></td>
+                        <td><span class="access-visible">✅</span></td>
+                        <td><span class="access-visible">✅</span></td>
+                        <td><span class="access-visible">✅</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-pii"><i class="fa-solid fa-user-shield"></i> PII</span></td>
+                        <td><span class="access-visible">✅</span></td>
+                        <td><span class="access-visible">✅ visible</span></td>
+                        <td><span class="access-hash">🔒 hash/encrypt</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-spii"><i class="fa-solid fa-shield-halved"></i> SPII</span></td>
+                        <td><span class="access-visible">✅</span></td>
+                        <td><span class="access-masked">🔒 always masked</span></td>
+                        <td><span class="access-masked">🔒 always masked</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-secret"><i class="fa-solid fa-ban"></i> SECRET</span></td>
+                        <td><span class="access-visible">✅</span></td>
+                        <td><span class="access-visible">✅ visible</span></td>
+                        <td><span class="access-redacted">🔴 redacted</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- ── Controls Bar ─────────────────────────────── -->
+    <section class="controls-bar" aria-label="View and upload controls">
+        <div class="controls-left">
+            <div class="search-box">
+                <i class="fa-solid fa-search"></i>
+                <input id="search-input" type="text" placeholder="Search files…" />
+            </div>
+            <div class="toggle-group">
+                <span id="label-admin" class="toggle-label active">
+                    <i class="fa-solid fa-user-tie"></i> Admin
+                </span>
+                <div id="view-toggle-1" class="view-toggle-btn" data-view="internal" title="Switch to Internal view">
+                    <i class="fa-solid fa-server"></i> Internal
+                </div>
+                <div id="view-toggle-2" class="view-toggle-btn" data-view="external" title="Switch to External view">
+                    <i class="fa-solid fa-cloud"></i> External
+                </div>
+            </div>
+        </div>
+        <button id="upload-btn" class="upload-button" type="button">
+            <i class="fa-solid fa-cloud-arrow-up"></i> Upload Files
+        </button>
+    </section>
+
+    <!-- ── Upload Modal ─────────────────────────────── -->
+    <div id="upload-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-cloud-arrow-up"></i> Upload to Vault</h2>
+                <button id="modal-close" class="icon-button" type="button"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="drop-zone" id="drop-zone">
+                <i class="fa-solid fa-file-arrow-up"></i>
+                <p>Drag &amp; drop files here, or <span class="browse-link">browse</span></p>
+                <small>PDF, TXT, CSV, images, and more</small>
+                <input id="file-input" type="file" multiple style="display:none;" />
+            </div>
+            <div id="upload-queue" class="upload-queue"></div>
+            <div class="modal-fields">
+                <div class="field-row">
+                    <label for="upload-tier">Sensitivity Tier</label>
+                    <select id="upload-tier">
+                        <option value="">Auto-detect</option>
+                        <option value="PUBLIC">PUBLIC — Safe to share</option>
+                        <option value="PII">PII — Personal data</option>
+                        <option value="SPII">SPII — Sensitive personal data</option>
+                        <option value="SECRET">SECRET — Company secret</option>
+                    </select>
+                </div>
+                <div class="field-row">
+                    <label for="upload-tags">Tags <small>(comma-separated)</small></label>
+                    <input id="upload-tags" type="text" placeholder="e.g. driver, report, Q2" />
+                </div>
+                <div class="field-row">
+                    <label for="upload-desc">Description</label>
+                    <input id="upload-desc" type="text" placeholder="Optional description" />
+                </div>
+            </div>
+            <button id="submit-upload" class="primary-button" type="button" disabled>
+                <i class="fa-solid fa-upload"></i> Upload
+            </button>
         </div>
     </div>
 
-    <script src="/static/js/file-vault.js?v=1"></script>
-</body>
-</html>
+    <!-- ── File Grid / List ─────────────────────────── -->
+    <section class="file-grid-section">
+        <div class="file-grid-header">
+            <div>
+                <p class="eyebrow">Your Files</p>
+                <h2 id="files-heading">All Files</h2>
+            </div>
+            <div class="view-mode-group">
+                <button id="view-grid" class="icon-button active" title="Grid view" type="button"><i class="fa-solid fa-grip"></i></button>
+                <button id="view-list" class="icon-button" title="List view" type="button"><i class="fa-solid fa-list"></i></button>
+            </div>
+        </div>
+        <div id="file-container" class="file-grid">
+            <div class="empty-vault">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <h3>Your vault is empty</h3>
+                <p>Upload files to get started. Each file will be automatically classified into the appropriate security tier.</p>
+                <button class="primary-button trigger-upload" type="button"><i class="fa-solid fa-plus"></i> Upload your first file</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── File Detail Modal ────────────────────────── -->
+    <div id="detail-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-card detail-card">
+            <div class="modal-header">
+                <h2 id="detail-filename"><i class="fa-solid fa-file"></i> File Details</h2>
+                <button id="detail-close" class="icon-button" type="button"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="detail-body">
+                <div class="detail-meta">
+                    <div class="detail-row"><span>File ID</span><strong id="detail-id"></strong></div>
+                    <div class="detail-row"><span>Tier</span><div id="detail-tier-badge"></div></div>
+                    <div class="detail-row"><span>Size</span><strong id="detail-size"></strong></div>
+                    <div class="detail-row"><span>Type</span><strong id="detail-type"></strong></div>
+                    <div class="detail-row"><span>Uploaded</span><strong id="detail-date"></strong></div>
+                    <div class="detail-row"><span>Downloads</span><strong id="detail-downloads"></strong></div>
+                    <div class="detail-row"><span>SHA-256</span><code id="detail-hash"></code></div>
+                </div>
+                <div class="detail-actions-section">
+                    <div class="detail-tier-edit">
+                        <label for="detail-tier-select">Change Tier</label>
+                        <select id="detail-tier-select">
+                            <option value="PUBLIC">PUBLIC</option>
+                            <option value="PII">PII</option>
+                            <option value="SPII">SPII</option>
+                            <option value="SECRET">SECRET</option>
+                        </select>
+                    </div>
+                    <div class="detail-buttons">
+                        <button id="detail-download" class="action-btn download-btn" type="button"><i class="fa-solid fa-download"></i> Download</button>
+                        <button id="detail-star" class="action-btn star-btn" type="button"><i class="fa-regular fa-star"></i> Star</button>
+                        <button id="detail-delete" class="action-btn delete-btn" type="button"><i class="fa-solid fa-trash"></i> Delete</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/file-vault.js?v=1"></script>
+{% endblock %}
