@@ -432,6 +432,17 @@ async def websocket_metrics(websocket: WebSocket):
         if websocket in active_connections:
             active_connections.remove(websocket)
 
+@app.get("/api/audit-log")
+async def get_audit_log(last_n: int = 30):
+    """Return ISO27001 audit trail events and compliance summary."""
+    import audit_log as _audit
+    return {
+        "timestamp": datetime.now().isoformat(),
+        "recent_events": _audit.get_recent_events(last_n),
+        "summary": _audit.get_audit_summary(),
+    }
+
+
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint"""

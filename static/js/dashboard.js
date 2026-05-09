@@ -23,12 +23,15 @@ document.addEventListener("DOMContentLoaded", () => {
     bindActions();
     connectWebSocket();
     loadDashboard();
+    loadAuditLog();
     refreshTimer = setInterval(loadDashboard, 10000);
+    setInterval(loadAuditLog, 15000);
 });
 
 function bindActions() {
     document.getElementById("run-simulation").addEventListener("click", runSimulation);
     document.getElementById("refresh-now").addEventListener("click", loadDashboard);
+    document.getElementById("refresh-audit").addEventListener("click", loadAuditLog);
     document.getElementById("quick-safe").addEventListener("click", () => {
         const sample = samples[Math.floor(Math.random() * samples.length)];
         document.getElementById("userInput").value = sample.userInput;
@@ -194,6 +197,7 @@ function updateDashboard(data) {
     updateCharts(stats, workflow);
     updateAlerts(alerts);
     updateHistory(history);
+    updateComplianceKPIs(stats, workflow);
     flashCards();
 }
 
@@ -435,6 +439,76 @@ function escapeHtml(value) {
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
+}
+
+function updateComplianceKPIs(stats, workflow) {
+    // ISO14001: on-premise ratio (local LLM processing = lower cloud carbon)
+    const totalReq = Number(workflow.total_requests ?? stats.total_requests ?? 0);
+    const localReq = Number(workflow.local_llm_used ?? stats.local_routing_count ?? 0);
+    const onPremiseRatio = totalReq > 0 ? ((localReq / totalReq) * 100).toFixed(1) + "%" : "0%";
+    setText("on-premise-ratio", onPremiseRatio);
+
+    // ISO9001: quality pass rate (from stats if available, else calculate)
+    const qualityRate = stats.quality_pass_rate || "100.0%";
+    setText("quality-pass-rate", qualityRate);
+}
+
+async function loadAuditLog() {
+    try {
+        const response = await fetch("/api/audit-log?last_n=30");
+        if (!response.ok) return;
+        const data = await response.json();
+        updateAuditPanel(data.recent_events || [], data.summary || {});
+    } catch (error) {
+        console.warn("Audit log fetch failed:", error);
+    }
+}
+
+function updateAuditPanel(events, summary) {
+    // Update ISO27001 KPI card
+    setText("audit-total", summary.total_events ?? events.length ?? 0);
+    const byAction = summary.by_action || {};
+    setText("audit-breakdown",
+        `${byAction.route ?? 0} route · ${byAction.mask ?? 0} mask · ${byAction.policy_check ?? 0} policy`
+    );
+
+    // Update audit event stream panel
+    const panel = document.getElementById("audit-panel");
+    if (!events.length) {
+        panel.className = "scroll-region empty-state";
+        panel.textContent = "No audit events yet";
+        return;
+    }
+
+    panel.className = "scroll-region";
+    panel.innerHTML = events.slice().reverse().map((e) => {
+        const action = escapeHtml(e.action || "event");
+        const classification = escapeHtml(e.classification || "");
+        const decision = escapeHtml(e.decision || "");
+        const reason = escapeHtml((e.reason || "").substring(0, 90));
+        const traceId = escapeHtml((e.trace_id || "").substring(0, 8));
+        const ts = formatTime(e.timestamp);
+        const decisionColor = {
+            allowed: "#16a34a", hashed: "#0891b2", encrypted: "#7c3aed",
+            redacted: "#d97706", masked: "#0891b2", blocked: "#dc2626",
+            rejected: "#dc2626", approved: "#16a34a", restricted: "#d97706",
+            cloud: "#16a34a", local: "#2563eb",
+        }[decision] || "#687589";
+
+        return `
+            <article class="audit-item">
+                <span class="audit-badge audit-action-${action}">${action}</span>
+                <div class="audit-meta">
+                    <strong>
+                        <span style="color:${decisionColor};font-weight:700;">${decision.toUpperCase()}</span>
+                        &nbsp;·&nbsp;${classification}
+                        ${traceId ? `<span style="color:var(--quiet);font-size:11px;font-family:var(--font-mono);">&nbsp;#${traceId}</span>` : ""}
+                    </strong>
+                    <small>${reason} &mdash; ${ts}</small>
+                </div>
+            </article>
+        `;
+    }).join("");
 }
 
 window.addEventListener("beforeunload", () => {

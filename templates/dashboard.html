@@ -210,6 +210,50 @@
                         <div id="history-panel" class="scroll-region empty-state">No requests yet</div>
                     </div>
                 </section>
+
+                <!-- ── Compliance KPI band ─────────────────────────── -->
+                <section class="compliance-grid" aria-label="Compliance KPIs">
+                    <article class="metric-card accent-blue">
+                        <div class="metric-top">
+                            <span>ISO27001 — Audit Trail</span>
+                            <div class="metric-icon"><i class="fa-solid fa-file-shield"></i></div>
+                        </div>
+                        <strong id="audit-total">0</strong>
+                        <small id="audit-breakdown">0 route · 0 mask · 0 policy</small>
+                    </article>
+
+                    <article class="metric-card accent-green">
+                        <div class="metric-top">
+                            <span>ISO14001 — On-Premise</span>
+                            <div class="metric-icon"><i class="fa-solid fa-leaf"></i></div>
+                        </div>
+                        <strong id="on-premise-ratio">0%</strong>
+                        <small>local LLM processing (lower carbon footprint)</small>
+                    </article>
+
+                    <article class="metric-card accent-cyan">
+                        <div class="metric-top">
+                            <span>ISO9001 — Quality Rate</span>
+                            <div class="metric-icon"><i class="fa-solid fa-circle-check"></i></div>
+                        </div>
+                        <strong id="quality-pass-rate">100%</strong>
+                        <small>requests without critical policy violations</small>
+                    </article>
+                </section>
+
+                <!-- ── ISO27001 Audit Event Stream ──────────────────── -->
+                <div class="panel audit-panel" style="margin-top:14px;">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">ISO27001 · A.12.4</p>
+                            <h2>Audit Trail</h2>
+                        </div>
+                        <button id="refresh-audit" class="icon-button" title="Refresh audit log" type="button">
+                            <i class="fa-solid fa-rotate"></i>
+                        </button>
+                    </div>
+                    <div id="audit-panel" class="scroll-region empty-state" style="max-height:320px;">No audit events yet</div>
+                </div>
             </main>
         </div>
     </div>
