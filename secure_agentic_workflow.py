@@ -20,6 +20,7 @@ from data_masking_prototype import DataMaskingPipeline
 from policy_enforcement_prototype import PolicyEnforcementPipeline
 from monitoring_dashboard_prototype import MonitoringDashboard
 import stockholm_bus_data as bus_db
+import data_policy
 import json
 
 
@@ -45,41 +46,59 @@ class SecureAgenticWorkflow:
         self.monitoring = MonitoringDashboard()
         self.request_history = []
         
-    def _fetch_context(self, user_input: str) -> str:
-        """Query the real stockholm_bus_data database and return relevant data as context."""
+    def _fetch_context(self, user_input: str, is_local: bool = False) -> str:
+        """Query the real stockholm_bus_data database and return relevant data as context.
+
+        For LOCAL LLM: raw data (full fidelity).
+        For CLOUD LLM: fields are filtered through data_policy.filter_for_external().
+        """
+        def _filter(table: str, records: list) -> list:
+            if is_local:
+                return records
+            return [data_policy.filter_record_for_external(table, r) for r in records]
+
         try:
             text = user_input.lower()
-            
+
             # Specific vehicle lookup
             for v in bus_db.BUS_VEHICLES:
                 if v["vehicle_id"].lower() in text:
-                    drivers = bus_db.get_drivers(v["vehicle_id"])
-                    readings = bus_db.get_sensor_readings(vehicle_id=v["vehicle_id"])
+                    drivers = _filter("drivers", bus_db.get_drivers(v["vehicle_id"]))
+                    readings = _filter("iot_sensor_readings", bus_db.get_sensor_readings(vehicle_id=v["vehicle_id"])[:3])
+                    maintenance = _filter("maintenance_logs", bus_db.get_maintenance_logs(v["vehicle_id"]))
+                    vehicle_data = _filter("bus_vehicles", [v])[0]
                     return json.dumps({
-                        "vehicle": v,
+                        "vehicle": vehicle_data,
                         "drivers": drivers,
-                        "recent_sensor_readings": readings[:3]
+                        "recent_sensor_readings": readings,
+                        "maintenance_logs": maintenance,
                     }, indent=2)
-            
+
             # Specific driver lookup
             for d in bus_db.DRIVERS:
                 if d["driver_id"].lower() in text:
+                    driver_data = _filter("drivers", [d])[0]
                     readings = bus_db.get_sensor_readings()
-                    driver_readings = [r for r in readings if r["driver_id"] == d["driver_id"]]
-                    return json.dumps({"driver": d, "sensor_readings": driver_readings[:3]}, indent=2)
-            
+                    driver_readings = _filter("iot_sensor_readings", [r for r in readings if r["driver_id"] == d["driver_id"]][:3])
+                    shifts = _filter("driver_shifts", bus_db.get_shifts(driver_id=d["driver_id"])[:5])
+                    return json.dumps({"driver": driver_data, "sensor_readings": driver_readings, "shifts": shifts}, indent=2)
+
             # Line number lookup
             for route in bus_db.BUS_ROUTES:
                 if str(route["line_number"]) in text or route["line_name"].lower() in text:
-                    vehicles = bus_db.get_vehicles(route["route_id"])
-                    return json.dumps({"route": route, "vehicles": vehicles}, indent=2)
-            
-            # General search fallback
+                    vehicles = _filter("bus_vehicles", bus_db.get_vehicles(route["route_id"]))
+                    stops = _filter("bus_stops", bus_db.get_stops(route["route_id"])[:5])
+                    return json.dumps({"route": route, "vehicles": vehicles, "stops": stops}, indent=2)
+
+            # General search fallback (includes maintenance_logs, shifts, incidents)
             results = bus_db.search_data(user_input)
             return json.dumps({
-                "routes": results["routes"][:2],
-                "vehicles": results["vehicles"][:2],
-                "drivers": [{k: v for k, v in d.items() if k not in ("personal_number", "phone", "email")} for d in results["drivers"][:2]],
+                "routes":      results["routes"][:2],
+                "vehicles":    _filter("bus_vehicles",        results["vehicles"][:2]),
+                "drivers":     _filter("drivers",             results["drivers"][:2]),
+                "maintenance":  _filter("maintenance_logs",   results["maintenance"][:3]),
+                "shifts":      _filter("driver_shifts",       results["shifts"][:3]),
+                "incidents":   _filter("incidents",           results["incidents"][:3]),
             }, indent=2)
         except Exception as e:
             return f"[DB Error: {e}]"
@@ -206,7 +225,7 @@ class SecureAgenticWorkflow:
         else:
             # Fetch real data context from the database
             print(f"      [DB] Fetching real context from stockholm_bus_data...")
-            db_context = self._fetch_context(user_input)
+            db_context = self._fetch_context(user_input, is_local=use_local)
             
             if use_local:
                 # Local LLM: receives raw real data (no masking)

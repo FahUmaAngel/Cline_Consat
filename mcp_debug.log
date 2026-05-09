@@ -1,0 +1,61 @@
+[01:35:14.292610] MAIN_START pid=9496
+[01:35:14.294571] SERVER_START
+[01:35:14.295579] READ_MSG waiting...
+[01:35:14.295579] READ_MSG raw: b'{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}}}\n'
+[01:35:14.296636] RECV initialize
+[01:35:14.297818] SEND response for initialize
+[01:35:14.299349] READ_MSG waiting...
+[01:35:14.301530] READ_MSG raw: b'{"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}}\n'
+[01:35:14.302222] RECV notifications/initialized
+[01:35:14.303549] READ_MSG waiting...
+[01:35:14.401489] READ_MSG raw: b'{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "consat_route", "arguments": {"text": "show bus s'
+[01:35:14.401489] RECV tools/call
+[01:35:14.401489] TOOL_START consat_route
+[01:35:16.149935] TOOL_END   consat_route
+[01:35:16.149935] SEND response for tools/call
+[01:35:16.149935] READ_MSG waiting...
+[01:35:16.149935] READ_MSG raw: b'{"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "consat_workflow_process", "arguments": {"user_in'
+[01:35:16.149935] RECV tools/call
+[01:35:16.149935] TOOL_START consat_workflow_process
+[01:35:16.172138] TOOL_END   consat_workflow_process
+[01:35:16.173137] SEND response for tools/call
+[01:35:16.174163] READ_MSG waiting...
+[01:35:16.174163] READ_MSG got EOF
+[01:35:34.513345] MAIN_START pid=21264
+[01:35:34.513345] SERVER_START
+[01:35:34.513345] READ_MSG waiting...
+[01:35:34.513345] READ_MSG raw: b'{"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"Cline","version"'
+[01:35:34.513345] RECV initialize
+[01:35:34.513345] SEND response for initialize
+[01:35:34.513345] READ_MSG waiting...
+[01:35:34.531213] READ_MSG raw: b'{"method":"notifications/initialized","jsonrpc":"2.0"}\n'
+[01:35:34.531213] RECV notifications/initialized
+[01:35:34.531213] READ_MSG waiting...
+[01:35:34.531213] READ_MSG raw: b'{"method":"tools/list","jsonrpc":"2.0","id":1}\n'
+[01:35:34.537521] RECV tools/list
+[01:35:34.537521] SEND response for tools/list
+[01:35:34.537521] READ_MSG waiting...
+[01:35:34.544845] READ_MSG raw: b'{"method":"resources/list","jsonrpc":"2.0","id":2}\n'
+[01:35:34.544845] RECV resources/list
+[01:35:34.544845] SEND response for resources/list
+[01:35:34.544845] READ_MSG waiting...
+[01:35:34.557537] READ_MSG raw: b'{"method":"resources/templates/list","jsonrpc":"2.0","id":3}\n'
+[01:35:34.559546] RECV resources/templates/list
+[01:35:34.559546] SEND response for resources/templates/list
+[01:35:34.560555] READ_MSG waiting...
+[01:35:34.564051] READ_MSG raw: b'{"method":"prompts/list","jsonrpc":"2.0","id":4}\n'
+[01:35:34.564051] RECV prompts/list
+[01:35:34.564051] SEND response for prompts/list
+[01:35:34.564051] READ_MSG waiting...
+[01:38:19.035585] READ_MSG raw: b'{"method":"tools/call","params":{"name":"consat_data_policy","arguments":{"query":"Show me the personal number and salar'
+[01:38:19.035585] RECV tools/call
+[01:38:19.035585] TOOL_START consat_data_policy
+[01:38:20.383514] TOOL_END   consat_data_policy
+[01:38:20.384960] SEND response for tools/call
+[01:38:20.385889] READ_MSG waiting...
+[01:38:21.629637] READ_MSG raw: b'{"method":"tools/call","params":{"name":"consat_driver_lookup","arguments":{"driver_id":"DRV-1001"}},"jsonrpc":"2.0","id'
+[01:38:21.629637] RECV tools/call
+[01:38:21.629637] TOOL_START consat_driver_lookup
+[01:38:21.638203] TOOL_END   consat_driver_lookup
+[01:38:21.638203] SEND response for tools/call
+[01:38:21.638203] READ_MSG waiting...

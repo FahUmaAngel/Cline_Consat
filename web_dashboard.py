@@ -219,6 +219,200 @@ async def simulate_request(request_data: dict):
             "error": str(e),
         }
 
+@app.post("/api/mcp/track")
+async def mcp_track(request_data: dict):
+    """
+    Lightweight endpoint called by the MCP server's background thread.
+    Accepts a pre-computed tool result and records it in dashboard history.
+    No heavy processing — just records and returns immediately.
+    """
+    if not workflow:
+        return {"success": False}
+
+    import time as _time
+    tool   = request_data.get("tool", "")
+    args   = request_data.get("args", {})
+    result = request_data.get("result", {})
+
+    try:
+        if tool == "consat_workflow_process":
+            routing  = result.get("routing", {})
+            metrics  = result.get("metrics", {})
+            entry = {
+                **result,
+                "user_input": result.get("user_input", args.get("user_input", "")),
+            }
+            workflow.request_history.append(entry)
+            workflow.monitoring.record_request(
+                routing_decision  = routing.get("llm_used", "cloud"),
+                processing_time   = float(metrics.get("processing_time_ms", 0)),
+                masked_items      = int(metrics.get("masked_items_count", 0)),
+                policy_violations = result.get("policy_check", {}).get("critical_violations", 0),
+                sensitivity_level = routing.get("sensitivity_level", "low"),
+                force_overridden  = result.get("force_overridden", False),
+            )
+
+        elif tool in ("consat_route", "consat_bus_query", "consat_driver_lookup"):
+            # Determine query text and run a fast (no-LLM) sensitivity check
+            if tool == "consat_route":
+                query_text = args.get("text", "")
+                sensitivity = result.get("sensitivity_level", "low")
+                llm_used    = result.get("routing_decision", "cloud")
+                patterns    = result.get("detected_patterns", [])
+                reason      = result.get("reason", "")
+            else:
+                query_text = (f"Driver lookup {args.get('driver_id','')}"
+                              if tool == "consat_driver_lookup" else args.get("query", ""))
+                route_info  = workflow.router.route(query_text)
+                sensitivity = route_info["sensitivity_level"]
+                llm_used    = route_info["routing_decision"]
+                patterns    = route_info.get("detected_patterns", [])
+                reason      = route_info.get("reason", "")
+
+            status = "blocked" if llm_used == "local" else "approved"
+            entry = {
+                "request_id":     f"mcp_{tool[:4]}_{int(_time.time()*1000)}",
+                "user_input":     f"[Cline] {query_text[:80]}",
+                "status":         status,
+                "force_overridden": False,
+                "force_route":    "auto",
+                "timestamp":      _time.time(),
+                "routing": {
+                    "decision":          llm_used,
+                    "reason":            reason,
+                    "llm_used":          llm_used,
+                    "sensitivity_level": sensitivity,
+                    "detected_patterns": patterns,
+                },
+                "masking":       None,
+                "policy_check":  {"approved": True, "total_violations": 0,
+                                  "critical_violations": 0, "violations": []},
+                "metrics":       {"processing_time_ms": "0", "masked_items_count": 0},
+                "final_output":  None,
+            }
+            workflow.request_history.append(entry)
+            workflow.monitoring.record_request(
+                routing_decision  = llm_used,
+                processing_time   = 0,
+                masked_items      = 0,
+                policy_violations = 0,
+                sensitivity_level = sensitivity,
+                force_overridden  = False,
+            )
+
+        return {"success": True}
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/mcp/call")
+async def mcp_call(request_data: dict):
+    """
+    Bridge endpoint for the MCP server (Cline integration).
+    Every Cline tool call is forwarded here so it passes through the dashboard's
+    workflow instance and appears in the monitoring UI.
+    """
+    if not workflow:
+        return {"success": False, "error": "Workflow not initialized"}
+
+    tool = request_data.get("tool", "")
+    args = request_data.get("args", {})
+
+    try:
+        if tool == "consat_workflow_process":
+            user_input = args.get("user_input", "")
+            llm_output = args.get("llm_output")
+            force_route = args.get("force_route", "auto")
+            log_buffer = io.StringIO()
+            def _run_wf():
+                with redirect_stdout(log_buffer):
+                    return workflow.process(user_input, llm_output, force_route=force_route)
+            result = await asyncio.to_thread(_run_wf)
+            result["user_input"] = user_input
+            return {"success": True, "result": result, "logs": log_buffer.getvalue().splitlines()[-20:]}
+
+        elif tool == "consat_route":
+            text = args.get("text", "")
+            # Run through the full workflow (with a stub output) so it appears in history
+            log_buffer = io.StringIO()
+            def _run_rt():
+                with redirect_stdout(log_buffer):
+                    return workflow.process(
+                        text,
+                        llm_output="[Sensitivity classification — no LLM response needed]",
+                        force_route="auto",
+                    )
+            await asyncio.to_thread(_run_rt)
+            return {"success": True, "result": workflow.router.route(text)}
+
+        elif tool == "consat_bus_query":
+            query = args.get("query", "")
+            # Track in dashboard via workflow
+            log_buffer = io.StringIO()
+            def _run_bq():
+                with redirect_stdout(log_buffer):
+                    return workflow.process(
+                        query,
+                        llm_output="[Bus data query — policy-filtered results returned to Cline]",
+                        force_route="auto",
+                    )
+            await asyncio.to_thread(_run_bq)
+            # Return the actual policy-filtered bus data
+            classification = data_policy.classify_query(query)
+            raw_results = bus_db.search_data(query)
+            filtered = {}
+            table_map = {"routes": "bus_routes", "vehicles": "bus_vehicles",
+                         "drivers": "drivers", "readings": "iot_sensor_readings"}
+            for key, tname in table_map.items():
+                if raw_results.get(key):
+                    filtered[key] = data_policy.filter_for_external(tname, raw_results[key])
+            return {
+                "success": True,
+                "query_classification": classification,
+                "filtered_results": filtered,
+                "record_counts": {k: len(v) for k, v in filtered.items()},
+                "policy_applied": True,
+                "note": "PII fields are hashed, COMPANY_SECRET fields are redacted.",
+            }
+
+        elif tool == "consat_driver_lookup":
+            driver_id = args.get("driver_id", "")
+            # Track in dashboard — driver_id regex triggers HIGH → LOCAL routing
+            log_buffer = io.StringIO()
+            def _run_dl():
+                with redirect_stdout(log_buffer):
+                    return workflow.process(
+                        f"Driver lookup: {driver_id}",
+                        llm_output="[Driver data retrieved and filtered by data policy]",
+                        force_route="auto",
+                    )
+            await asyncio.to_thread(_run_dl)
+            matches = [d for d in bus_db.DRIVERS if d["driver_id"] == driver_id]
+            if not matches:
+                return {"success": True, "result": {"error": f"Driver {driver_id} not found",
+                        "available_ids": [d["driver_id"] for d in bus_db.DRIVERS]}}
+            filtered = data_policy.filter_record_for_external("drivers", matches[0])
+            return {
+                "success": True,
+                "result": {
+                    "driver_filtered": filtered,
+                    "policy_applied": True,
+                    "fields_hashed":    [f for f, p in data_policy.POLICY_TABLE["drivers"].items() if p["action"] == "hash"],
+                    "fields_encrypted": [f for f, p in data_policy.POLICY_TABLE["drivers"].items() if p["action"] == "encrypt"],
+                    "fields_redacted":  [f for f, p in data_policy.POLICY_TABLE["drivers"].items() if p["action"] == "redact"],
+                    "note": "Full unfiltered data only available via LOCAL LLM.",
+                }
+            }
+
+        else:
+            return {"success": False, "error": f"Unknown tool for MCP bridge: {tool}"}
+
+    except Exception as e:
+        import traceback as _tb
+        return {"success": False, "error": str(e), "traceback": _tb.format_exc(limit=3)}
+
+
 @app.websocket("/ws/metrics")
 async def websocket_metrics(websocket: WebSocket):
     """WebSocket endpoint for real-time metrics updates"""
