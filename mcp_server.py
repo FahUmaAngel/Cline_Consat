@@ -107,11 +107,22 @@ TOOLS = [
     },
     {
         "name": "consat_mask",
-        "description": "Mask CONSAT-sensitive values before sending content to a cloud LLM.",
+        "description": "Mask CONSAT-sensitive values before sending content to a cloud LLM. Runs two passes: (1) schema-aware column masking against the POLICY_TABLE, then (2) regex pattern masking for emails, API keys, personnummer, etc.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "text": {"type": "string", "description": "Text to mask."},
+                "text": {"type": "string", "description": "Text to mask (can contain JSON with field names from the bus data schema)."},
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "consat_schema_mask",
+        "description": "Apply schema-aware column masking directly: scan any JSON for field names that appear in the bus-data POLICY_TABLE and apply hash / encrypt / redact per column automatically. Use this to test or demonstrate column-level policy enforcement without going through the full workflow.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "JSON string or text containing JSON blocks with field names from the bus data schema."},
             },
             "required": ["text"],
         },
@@ -222,15 +233,39 @@ def consat_route(args: Dict[str, Any]) -> Dict[str, Any]:
 def consat_mask(args: Dict[str, Any]) -> Dict[str, Any]:
     _, masking, _, _, _, _ = _get_components()
     masked_text, metadata = masking.process_for_cloud(args["text"])
-    masked_count = sum(len(v) for v in metadata.get("masked_items", {}).values()) if metadata else 0
+    masked_count = sum(len(v) for v in (metadata or {}).get("masked_items", {}).values()) if metadata else 0
     _audit.log_masking("mcp_mask_request", masked_count, trace_id=_audit.new_trace_id())
+    schema_report = (metadata or {}).get("schema_masking", {})
     return _content(
         {
             "masked_text": masked_text,
             "metadata": metadata,
             "summary": masking.get_summary(),
+            "schema_masking_report": {
+                "fields_masked_by_column_policy": schema_report.get("fields_masked", 0),
+                "tables_detected": schema_report.get("tables_detected", []),
+                "hashed_fields":   schema_report.get("by_action", {}).get("hash", []),
+                "encrypted_fields": schema_report.get("by_action", {}).get("encrypt", []),
+                "redacted_fields": schema_report.get("by_action", {}).get("redact", []),
+            },
         }
     )
+
+
+def consat_schema_mask(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Standalone schema-aware column masking — no regex, just POLICY_TABLE."""
+    import schema_aware_masker as sam
+    masked_text, report = sam.scan_and_mask(args["text"])
+    return _content({
+        "masked_text": masked_text,
+        "fields_masked": report["fields_masked"],
+        "tables_detected": report["tables_detected"],
+        "hashed_fields":   report["by_action"]["hash"],
+        "encrypted_fields": report["by_action"]["encrypt"],
+        "redacted_fields": report["by_action"]["redact"],
+        "full_events": report["events"],
+        "note": "Policy applied from POLICY_TABLE: PII fields are hashed/encrypted, COMPANY_SECRET fields are redacted.",
+    })
 
 
 def consat_policy_check(args: Dict[str, Any]) -> Dict[str, Any]:
@@ -364,6 +399,7 @@ def consat_audit_log(args: Dict[str, Any]) -> Dict[str, Any]:
 TOOL_HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "consat_route": consat_route,
     "consat_mask": consat_mask,
+    "consat_schema_mask": consat_schema_mask,
     "consat_policy_check": consat_policy_check,
     "consat_workflow_process": consat_workflow_process,
     "consat_metrics": consat_metrics,

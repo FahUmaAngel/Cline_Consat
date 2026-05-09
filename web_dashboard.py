@@ -62,6 +62,57 @@ def _get_dashboard():
     return dashboard
 
 
+def _classify_from_patterns(item):
+    """Derive the 4-tier data classification from the query's detected patterns.
+
+    Classification is based on what the USER ASKED (sensitivity router output),
+    not on what fields appeared in the database context.  The schema masker
+    always processes all columns of retrieved records, so redacted_fields being
+    non-empty does NOT mean the user asked for company secrets.
+    """
+    patterns = item.get("routing", {}).get("detected_patterns", [])
+    sensitivity = item.get("routing", {}).get("sensitivity_level", "low")
+
+    # No patterns detected → PUBLIC
+    if not patterns:
+        return "PUBLIC"
+
+    # Check for COMPANY_SECRET indicators in detected patterns
+    secret_keywords = [
+        "consat_eco_drive", "consat_iot_internal", "consat_operations",
+        "consat_finance", "business_secret",
+    ]
+    has_secret = any(
+        any(kw in p.lower() for kw in secret_keywords)
+        for p in patterns
+    )
+    if has_secret:
+        return "COMPANY_SECRET"
+
+    # Check for SPII indicators in detected patterns
+    spii_keywords = ["personnummer", "personal_number", "license_number"]
+    has_spii = any(
+        any(kw in p.lower() for kw in spii_keywords)
+        for p in patterns
+    )
+    if has_spii:
+        return "SPII"
+
+    # Check for PII indicators in detected patterns
+    pii_prefixes = ["PII:", "KEYWORD:consat_driver_pii"]
+    has_pii = any(
+        any(p.startswith(prefix) or prefix in p for prefix in pii_prefixes)
+        for p in patterns
+    )
+    if has_pii:
+        return "PII"
+
+    # Patterns detected but none matched specific tiers — use sensitivity level
+    if sensitivity == "high":
+        return "PII"  # HIGH but unknown type → treat as PII
+    return "PUBLIC"
+
+
 def _serialize_history(limit: int = 20):
     if not workflow:
         return []
@@ -76,7 +127,14 @@ def _serialize_history(limit: int = 20):
         row["masked_items_count"] = item.get("metrics", {}).get("masked_items_count", 0)
         row["critical_violations"] = item.get("policy_check", {}).get("critical_violations", 0)
         row["force_overridden"] = item.get("force_overridden", False)
+        row["secured_locally"] = item.get("secured_locally", False)
         row["force_route"] = item.get("force_route", "auto")
+        # Rich policy data for the UI
+        row["detected_patterns"] = item.get("routing", {}).get("detected_patterns", [])
+        row["routing_reason"] = item.get("routing", {}).get("reason", "")
+        row["schema_masking"] = item.get("schema_masking", {})
+        row["policy_violations"] = item.get("policy_check", {}).get("violations", [])
+        row["data_classification"] = _classify_from_patterns(item)
         serialized.append(row)
     return serialized
 
@@ -116,7 +174,13 @@ async def get_data_explorer(request: Request):
 
 @app.get("/api/bus-data")
 async def get_bus_data(table: str = "bus_routes", view: str = "internal"):
-    """Get bus data with optional policy filtering."""
+    """Get bus data with policy filtering.
+
+    view modes:
+      admin    → raw data, everything visible
+      internal → SPII masked, PII + SECRET visible
+      external → SPII + PII masked, SECRET redacted
+    """
     table_data_map = {
         "bus_routes":         bus_db.BUS_ROUTES,
         "bus_vehicles":       bus_db.BUS_VEHICLES,
@@ -130,10 +194,16 @@ async def get_bus_data(table: str = "bus_routes", view: str = "internal"):
     raw = table_data_map.get(table, [])
     if not raw:
         raise HTTPException(status_code=404, detail=f"Unknown table: {table}")
-    if view == "external":
-        filtered = data_policy.filter_for_external(table, raw)
+
+    if view == "admin":
+        return {"table": table, "view": "admin", "data": raw, "count": len(raw)}
+    elif view == "external":
+        filtered = data_policy.filter_records(table, raw, mode="external")
         return {"table": table, "view": "external", "data": filtered, "count": len(filtered)}
-    return {"table": table, "view": "internal", "data": raw, "count": len(raw)}
+    else:
+        # internal — mask SPII only
+        filtered = data_policy.filter_records(table, raw, mode="internal")
+        return {"table": table, "view": "internal", "data": filtered, "count": len(filtered)}
 
 @app.get("/api/data-policy")
 async def get_data_policy(table: str = None):

@@ -241,23 +241,44 @@ class SecureAgenticWorkflow:
             db_context = self._fetch_context(user_input, is_local=use_local)
             
             if use_local:
-                # Local LLM: receives raw real data (no masking)
-                enriched_prompt = f"""The user asked: \"{user_input}\"
+                # Local LLM — PII must still be masked (GDPR), SECRET stays visible
+                # (on-premise LLM is trusted for proprietary operational data)
+                print(f"      [MASK] Applying PII masking for local LLM path...")
+                pii_masked_context, masking_info = self.masking.process_for_local(db_context)
+                local_schema = masking_info.get('schema_masking', {})
+                if local_schema.get('fields_masked', 0):
+                    print(f"      [MASK] PII masked: {local_schema['by_action'].get('hash', [])} hashed, "
+                          f"{local_schema['by_action'].get('encrypt', [])} encrypted")
+                enriched_prompt = f"""The user asked: "{user_input}"
 
-Here is the real data from the CONSAT database:
-{db_context}
+Here is the data from the CONSAT database (PII is masked, operational data is accessible):
+{pii_masked_context}
 
 Answer the user's question using only the data above. Be concise and factual."""
             else:
                 # Cloud LLM: receives already-masked prompt text + masked real data
                 masked_context, db_masking_info = self.masking.process_for_cloud(db_context)
-                # Merge db masking counts into masking_info so they're tracked
+                # Merge db masking counts (both regex and schema) into masking_info
                 if masking_info and db_masking_info:
                     for k, v in db_masking_info['masked_items'].items():
                         if k in masking_info['masked_items']:
                             masking_info['masked_items'][k].extend(v)
                         else:
                             masking_info['masked_items'][k] = v
+                    # Merge schema masking reports
+                    db_schema = db_masking_info.get('schema_masking', {})
+                    cur_schema = masking_info.get('schema_masking', {})
+                    merged_events = cur_schema.get('events', []) + db_schema.get('events', [])
+                    masking_info['schema_masking'] = {
+                        'fields_masked': len(merged_events),
+                        'tables_detected': list({e['table'] for e in merged_events}),
+                        'events': merged_events,
+                        'by_action': {
+                            'hash':    [e['field'] for e in merged_events if e['action'] == 'hash'],
+                            'encrypt': [e['field'] for e in merged_events if e['action'] == 'encrypt'],
+                            'redact':  [e['field'] for e in merged_events if e['action'] == 'redact'],
+                        },
+                    }
                 elif db_masking_info:
                     masking_info = db_masking_info
                 enriched_prompt = f"""The user asked: \"{masked_input}\"
@@ -319,17 +340,23 @@ Answer the user's question using only the data above. Be concise and factual."""
 
         if not approved:
             final_status = 'rejected'
-        elif use_local and not force_overridden:
-            final_status = 'blocked'
         else:
             final_status = 'approved'
 
+        # Flag: request was auto-routed to local LLM for security
+        # (COMPANY_SECRET / HIGH sensitivity → local is the CORRECT path,
+        #  data is visible internally per policy — this is NOT a block)
+        secured_locally = use_local and not force_overridden
+
         # ========== Final Result ==========
+        schema_report = (masking_info or {}).get('schema_masking', {})
+
         result = {
             'request_id': f"req_{int(time.time() * 1000)}",
             'trace_id': trace_id,
             'user_input': user_input,
             'status': final_status,
+            'secured_locally': secured_locally,
             'force_overridden': force_overridden,
             'force_route': force_route if force_overridden else 'auto',
             'timestamp': time.time(),
@@ -341,6 +368,13 @@ Answer the user's question using only the data above. Be concise and factual."""
                 'detected_patterns': routing_result.get('detected_patterns', []),
             },
             'masking': masking_info,
+            'schema_masking': {
+                'fields_masked': schema_report.get('fields_masked', 0),
+                'tables_detected': schema_report.get('tables_detected', []),
+                'hashed_fields':   (schema_report.get('by_action') or {}).get('hash', []),
+                'encrypted_fields': (schema_report.get('by_action') or {}).get('encrypt', []),
+                'redacted_fields': (schema_report.get('by_action') or {}).get('redact', []),
+            },
             'policy_check': {
                 'approved': approved,
                 'total_violations': policy_result['total_violations'],
@@ -357,9 +391,10 @@ Answer the user's question using only the data above. Be concise and factual."""
         # Store in history
         self.request_history.append(result)
         
-        status_icon = {"approved": "✅", "rejected": "❌", "blocked": "🔒"}.get(final_status, "ℹ️")
+        status_icon = {"approved": "✅", "rejected": "❌"}.get(final_status, "ℹ️")
+        local_note = " (🔒 Secured via Local LLM)" if secured_locally else ""
         print(f"\n{'='*80}")
-        print(f"{status_icon} WORKFLOW COMPLETE - Status: {result['status'].upper()}")
+        print(f"{status_icon} WORKFLOW COMPLETE - Status: {result['status'].upper()}{local_note}")
         print(f"{'='*80}\n")
         
         return result
@@ -375,7 +410,7 @@ Answer the user's question using only the data above. Be concise and factual."""
         
         approved_count = sum(1 for r in self.request_history if r['status'] == 'approved')
         rejected_count = sum(1 for r in self.request_history if r['status'] == 'rejected')
-        blocked_count  = sum(1 for r in self.request_history if r['status'] == 'blocked')
+        secured_locally_count = sum(1 for r in self.request_history if r.get('secured_locally', False))
         local_count = sum(1 for r in self.request_history if r['routing']['llm_used'] == 'local')
         cloud_count = sum(1 for r in self.request_history if r['routing']['llm_used'] == 'cloud')
         
@@ -386,7 +421,7 @@ Answer the user's question using only the data above. Be concise and factual."""
             'total_requests': len(self.request_history),
             'approved': approved_count,
             'rejected': rejected_count,
-            'blocked': blocked_count,
+            'secured_locally': secured_locally_count,
             'approval_rate': f"{(approved_count / len(self.request_history) * 100):.1f}%" if self.request_history else "0%",
             'local_llm_used': local_count,
             'cloud_llm_used': cloud_count,

@@ -45,9 +45,15 @@ body { font-family: var(--font); }
 }
 
 .badge-pii {
-    background: #fffbeb;
-    color: #d97706;
-    border: 1px solid #fed7aa;
+    background: #eff6ff;
+    color: #2563eb;
+    border: 1px solid #bfdbfe;
+}
+
+.badge-spii {
+    background: #fff3ed;
+    color: #e04e17;
+    border: 1px solid #fdba8c;
 }
 
 .badge-secret {
@@ -129,7 +135,7 @@ body { font-family: var(--font); }
     flex-wrap: wrap;
 }
 
-/* ---- View Selector (pill-style button group) ---- */
+/* ---- View Selector (3-position) ---- */
 .view-selector {
     display: flex;
     gap: 4px;
@@ -142,27 +148,40 @@ body { font-family: var(--font); }
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 7px 16px;
+    padding: 8px 16px;
     border: none;
-    border-radius: 7px;
+    border-radius: 8px;
     background: transparent;
     color: #64748b;
+    font-family: inherit;
     font-size: var(--text-sm);
     font-weight: 700;
     cursor: pointer;
-    transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
+    transition: all 180ms ease;
     white-space: nowrap;
 }
 
 .view-btn:hover {
-    background: rgba(255, 255, 255, 0.7);
-    color: var(--ink);
+    color: #334155;
+    background: rgba(255, 255, 255, 0.6);
 }
 
-.view-btn.active {
-    background: #ffffff;
-    color: #1d4ed8;
-    box-shadow: 0 1px 6px rgba(15, 23, 42, 0.12);
+.view-btn.active[data-view="admin"] {
+    background: #7c3aed;
+    color: white;
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+}
+
+.view-btn.active[data-view="internal"] {
+    background: #2563eb;
+    color: white;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.view-btn.active[data-view="external"] {
+    background: #d97706;
+    color: white;
+    box-shadow: 0 4px 12px rgba(217, 119, 6, 0.3);
 }
 
 /* ---- View Indicator Badge ---- */
@@ -177,8 +196,8 @@ body { font-family: var(--font); }
 }
 
 .view-indicator.admin-view {
-    background: #f0fdf4;
-    color: #15803d;
+    background: #f3f0ff;
+    color: #7c3aed;
 }
 
 .view-indicator.internal-view {

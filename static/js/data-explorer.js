@@ -1,6 +1,7 @@
 /**
- * Data Explorer — Policy-Annotated Bus Data Viewer
- * Fetches Stockholm bus data and shows per-column policy badges.
+ * Data Explorer — 4-Tier Policy-Annotated Bus Data Viewer
+ * Supports 3 view modes: Admin / Internal / External
+ * Displays 4-tier classification badges: PUBLIC, PII, SPII, COMPANY_SECRET
  */
 
 (function () {
@@ -15,8 +16,7 @@
     const tableBody = document.getElementById("table-body");
     const tableHead = document.getElementById("table-head");
     const dataTable = document.getElementById("data-table");
-    // Bug fix #2: two elements had id="view-indicator"; target the one inside controls-bar
-    const viewIndicator = document.querySelector(".controls-bar .view-indicator");
+    const viewIndicator = document.getElementById("view-indicator");
     const queryInput = document.getElementById("query-input");
     const classifyBtn = document.getElementById("classify-btn");
     const classResult = document.getElementById("class-result");
@@ -31,8 +31,12 @@
 
         if (cls === "PII") {
             badgeClass = "badge-pii";
-            icon = "fa-user-shield";
+            icon = "fa-id-badge";
             label = `PII · ${action || "hash"}`;
+        } else if (cls === "SPII") {
+            badgeClass = "badge-spii";
+            icon = "fa-user-shield";
+            label = `SPII · ${action || "encrypt"}`;
         } else if (cls === "COMPANY_SECRET") {
             badgeClass = "badge-secret";
             icon = "fa-ban";
@@ -43,9 +47,7 @@
     }
 
     // ---- Cell rendering ----
-    // Bug fix #1: removed duplicate `const str` declaration (caused SyntaxError in strict mode)
-    // Bug fix #3: added `field` parameter to match call site renderCell(row[field], field)
-    function renderCell(value, field) {
+    function renderCell(value) {
         if (value === null || value === undefined) return "";
         const str = String(value);
         if (currentView === "admin") return escapeHtml(str);
@@ -114,7 +116,7 @@
             for (const row of rows) {
                 bodyHtml += "<tr>";
                 for (const field of fields) {
-                    bodyHtml += `<td>${renderCell(row[field], field)}</td>`;
+                    bodyHtml += `<td>${renderCell(row[field])}</td>`;
                 }
                 bodyHtml += "</tr>";
             }
@@ -147,13 +149,14 @@
             for (const t of tables) {
                 const card = document.getElementById(`card-${t.key}`);
                 if (!card) continue;
-                const p = policies[t.key] || { public: [], pii: [], company_secret: [] };
+                const p = policies[t.key] || { public: [], pii: [], spii: [], company_secret: [] };
                 const countsEl = card.querySelector(".field-counts");
                 if (countsEl) {
                     countsEl.innerHTML = `
-                        <span class="badge badge-public"><i class="fa-solid fa-lock-open"></i> ${p.public.length} public</span>
-                        <span class="badge badge-pii"><i class="fa-solid fa-user-shield"></i> ${p.pii.length} PII</span>
-                        <span class="badge badge-secret"><i class="fa-solid fa-ban"></i> ${p.company_secret.length} secret</span>
+                        <span class="badge badge-public"><i class="fa-solid fa-lock-open"></i> ${(p.public || []).length} public</span>
+                        <span class="badge badge-pii"><i class="fa-solid fa-id-badge"></i> ${(p.pii || []).length} PII</span>
+                        <span class="badge badge-spii"><i class="fa-solid fa-user-shield"></i> ${(p.spii || []).length} SPII</span>
+                        <span class="badge badge-secret"><i class="fa-solid fa-ban"></i> ${(p.company_secret || []).length} secret</span>
                     `;
                 }
             }
@@ -189,11 +192,15 @@
 
     function selectView(view) {
         currentView = view;
+
+        // Update button states
         document.querySelectorAll(".view-btn").forEach(btn => {
             btn.classList.toggle("active", btn.dataset.view === view);
         });
-        if (viewIndicator) {
-            const cfg = viewConfig[view];
+
+        // Update indicator
+        const cfg = viewConfig[view];
+        if (viewIndicator && cfg) {
             viewIndicator.className = "view-indicator " + cfg.cls;
             viewIndicator.innerHTML = cfg.html;
         }
@@ -215,6 +222,7 @@
 
             let badgeClass = "badge-public";
             if (data.classification === "PII") badgeClass = "badge-pii";
+            if (data.classification === "SPII") badgeClass = "badge-spii";
             if (data.classification === "COMPANY_SECRET") badgeClass = "badge-secret";
 
             let html = `

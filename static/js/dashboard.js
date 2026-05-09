@@ -184,7 +184,7 @@ function updateDashboard(data) {
     healthEl.style.color = healthColor(healthStatus);
 
     setText("route-mix", `${workflow.local_llm_used || stats.local_routing_count || 0} local / ${workflow.cloud_llm_used || stats.cloud_routing_count || 0} cloud`);
-    setText("decision-mix", `${workflow.approved || 0} approved / ${workflow.blocked || 0} blocked / ${workflow.rejected || 0} rejected`);
+    setText("decision-mix", `${workflow.approved || 0} approved / ${workflow.secured_locally || 0} secured locally / ${workflow.rejected || 0} rejected`);
     setText("masked-count", `${stats.total_masking_items || 0} masked items`);
     setText("masked-total", stats.total_masking_items || 0);
     setText("alert-count", `${stats.total_alerts || alerts.length || 0} active alerts`);
@@ -195,7 +195,7 @@ function updateDashboard(data) {
     setText("last-updated", `Updated ${formatTime(data.timestamp)}`);
 
     updateCharts(stats, workflow);
-    updateAlerts(alerts);
+    updateAlerts(alerts, history);
     updateHistory(history);
     updateComplianceKPIs(stats, workflow);
     flashCards();
@@ -253,22 +253,109 @@ function updateChartFallback(localCount, cloudCount, workflow, stats) {
     }
 }
 
-function updateAlerts(alerts) {
+function updateAlerts(alerts, history) {
     const panel = document.getElementById("alerts-panel");
-    if (!alerts.length) {
+
+    // Build combined alerts: backend alerts + UI-derived policy alerts from history
+    const combined = [];
+
+    // Backend monitoring alerts
+    for (const alert of (alerts || [])) {
+        combined.push({
+            severity: alert.severity || "info",
+            message: alert.message || "Alert",
+            timestamp: alert.timestamp,
+            metric_type: alert.metric_type || "metric",
+        });
+    }
+
+    // Derive policy alerts from recent request history
+    for (const req of (history || []).slice(-10)) {
+        const classification = req.data_classification || "PUBLIC";
+        const status = req.status || "unknown";
+        const route = req.route || "unknown";
+        const sensitivity = req.sensitivity || "unknown";
+        const forceOverridden = req.force_overridden || false;
+        const patterns = req.detected_patterns || [];
+        const violations = req.policy_violations || [];
+        const inputPreview = (req.input_preview || "").slice(0, 60);
+
+        if (classification === "COMPANY_SECRET" && route === "cloud") {
+            combined.push({
+                severity: "critical",
+                message: `⛔ COMPANY_SECRET data sent to Cloud LLM — data was masked but policy recommends LOCAL only. Query: "${inputPreview}..."`,
+                timestamp: req.timestamp,
+                metric_type: "data_classification",
+            });
+        }
+
+        if (classification === "SPII") {
+            const schema = req.schema_masking || {};
+            const encrypted = (schema.encrypted_fields || []).join(", ");
+            combined.push({
+                severity: "critical",
+                message: `🔒 SPII data intercepted — ${encrypted || "sensitive fields"} masked before processing. Query: "${inputPreview}..."`,
+                timestamp: req.timestamp,
+                metric_type: "spii_protection",
+            });
+        }
+
+        if (classification === "PII" && route === "cloud") {
+            const schema = req.schema_masking || {};
+            const hashed = (schema.hashed_fields || []).join(", ");
+            combined.push({
+                severity: "warning",
+                message: `⚠️ PII data (${hashed || "identifiable fields"}) hashed before cloud transmission.`,
+                timestamp: req.timestamp,
+                metric_type: "pii_masking",
+            });
+        }
+
+        if (violations.length > 0) {
+            const critical = violations.filter(v => v.severity === "critical");
+            if (critical.length > 0) {
+                combined.push({
+                    severity: "critical",
+                    message: `❌ Policy violation: ${critical[0].message} — code rejected`,
+                    timestamp: req.timestamp,
+                    metric_type: "policy_violation",
+                });
+            }
+        }
+
+        if (forceOverridden && sensitivity === "high") {
+            combined.push({
+                severity: "warning",
+                message: `⚡ Manual routing override on HIGH sensitivity request — data was masked before cloud routing`,
+                timestamp: req.timestamp,
+                metric_type: "manual_override",
+            });
+        }
+    }
+
+    if (!combined.length) {
         panel.className = "scroll-region empty-state";
         panel.textContent = "No alerts";
         return;
     }
 
+    // Sort by severity priority then timestamp
+    const severityOrder = { critical: 0, warning: 1, info: 2 };
+    combined.sort((a, b) => (severityOrder[a.severity] ?? 3) - (severityOrder[b.severity] ?? 3));
+
     panel.className = "scroll-region";
-    panel.innerHTML = alerts.slice().reverse().map((alert) => {
+    panel.innerHTML = combined.map((alert) => {
         const severity = escapeHtml(alert.severity || "info");
+        const icons = { critical: "🔴", warning: "🟡", info: "🔵" };
         return `
             <article class="alert-item alert-${severity}">
-                <strong>${severity.toUpperCase()}</strong>
-                <p>${escapeHtml(alert.message || "Alert")}</p>
-                <small>${formatTime(alert.timestamp)} | ${escapeHtml(alert.metric_type || "metric")}</small>
+                <div class="alert-header">
+                    <span class="alert-severity-icon">${icons[severity] || "ℹ️"}</span>
+                    <strong class="alert-severity-label">${severity.toUpperCase()}</strong>
+                    <span class="alert-type-badge">${escapeHtml(alert.metric_type || "metric")}</span>
+                </div>
+                <p class="alert-message">${escapeHtml(alert.message || "Alert")}</p>
+                <small class="alert-time">${formatTime(alert.timestamp)}</small>
             </article>
         `;
     }).join("");
@@ -283,7 +370,6 @@ function updateHistory(history) {
     }
 
     panel.className = "scroll-region";
-    panel.className = "scroll-region";
     panel.innerHTML = history.slice().reverse().map((request) => {
         const route = request.route || request.routing?.llm_used || "unknown";
         const status = request.status || "unknown";
@@ -292,30 +378,115 @@ function updateHistory(history) {
         const masked = request.masked_items_count ?? request.metrics?.masked_items_count ?? 0;
         const input = request.input_preview || request.user_input || request.routing?.reason || "Workflow request";
         const forceOverridden = request.force_overridden || false;
-        
-        const overrideBadge = forceOverridden
-            ? `<span class="decision-badge" style="background:#f59e0b;color:#fff;">⚡ OVERRIDE</span>`
-            : `<span class="decision-badge decision-${escapeHtml(status)}">${escapeHtml(status).toUpperCase()}</span>`;
-        
-        const overrideWarning = (forceOverridden && sensitivity === "high")
-            ? `<p style="color:#f59e0b;font-size:11px;margin:2px 0 0 0;">⚠️ Manually overridden — data was masked before cloud routing</p>`
+        const classification = request.data_classification || "PUBLIC";
+        const detectedPatterns = request.detected_patterns || [];
+        const routingReason = request.routing_reason || "";
+        const schema = request.schema_masking || {};
+        const violations = request.policy_violations || [];
+
+        // Classification badge
+        const classColors = {
+            COMPANY_SECRET: { bg: "#dc2626", icon: "🔴" },
+            SPII:           { bg: "#ea580c", icon: "🟠" },
+            PII:            { bg: "#ca8a04", icon: "🟡" },
+            PUBLIC:         { bg: "#16a34a", icon: "🟢" },
+        };
+        const cc = classColors[classification] || classColors.PUBLIC;
+        const classificationBadge = `<span class="classification-badge" style="background:${cc.bg};">${cc.icon} ${escapeHtml(classification)}</span>`;
+
+        // Status badge
+        const securedLocally = request.secured_locally || false;
+        const statusIcons = { approved: "✅", rejected: "❌" };
+        let statusBadge;
+        if (forceOverridden && (sensitivity === "high" || classification === "COMPANY_SECRET")) {
+            // Dangerous override: COMPANY_SECRET forced to Cloud → show BLOCKED
+            statusBadge = `<span class="decision-badge decision-blocked">⛔ BLOCKED</span>`;
+        } else if (forceOverridden) {
+            statusBadge = `<span class="decision-badge decision-override">⚡ OVERRIDE</span>`;
+        } else if (securedLocally) {
+            statusBadge = `<span class="decision-badge decision-approved">🔒 SECURED</span>`;
+        } else {
+            statusBadge = `<span class="decision-badge decision-${escapeHtml(status)}">${statusIcons[status] || ""} ${escapeHtml(status).toUpperCase()}</span>`;
+        }
+
+        // Route badge
+        const routeBadge = `<span class="route-badge route-${escapeHtml(route)}">${escapeHtml(route).toUpperCase()} LLM</span>`;
+
+        // Detected patterns row
+        let patternsHtml = "";
+        if (detectedPatterns.length > 0) {
+            const tags = detectedPatterns.slice(0, 5).map(p => {
+                const type = p.split(":")[0] || "";
+                return `<span class="pattern-tag pattern-${escapeHtml(type.toLowerCase())}">${escapeHtml(p)}</span>`;
+            }).join("");
+            const more = detectedPatterns.length > 5 ? `<span class="pattern-tag pattern-more">+${detectedPatterns.length - 5} more</span>` : "";
+            patternsHtml = `<div class="history-patterns"><span class="patterns-label">🔍 Detected:</span> ${tags}${more}</div>`;
+        }
+
+        // Routing reason
+        const reasonHtml = routingReason
+            ? `<div class="history-reason"><span>💡</span> ${escapeHtml(routingReason)}</div>`
             : "";
-        
+
+        // Schema masking summary
+        let maskingHtml = "";
+        const hashed = schema.hashed_fields || [];
+        const encrypted = schema.encrypted_fields || [];
+        const redacted = schema.redacted_fields || [];
+        const totalMaskedFields = hashed.length + encrypted.length + redacted.length;
+        if (totalMaskedFields > 0) {
+            const parts = [];
+            if (hashed.length) parts.push(`${hashed.length} hashed`);
+            if (encrypted.length) parts.push(`${encrypted.length} encrypted`);
+            if (redacted.length) parts.push(`${redacted.length} redacted`);
+
+            let detailsInner = "";
+            if (hashed.length) detailsInner += `<div class="masking-detail-row"><span class="masking-action-label masking-hash">HASH</span> ${hashed.map(f => escapeHtml(f)).join(", ")}</div>`;
+            if (encrypted.length) detailsInner += `<div class="masking-detail-row"><span class="masking-action-label masking-encrypt">ENC</span> ${encrypted.map(f => escapeHtml(f)).join(", ")}</div>`;
+            if (redacted.length) detailsInner += `<div class="masking-detail-row"><span class="masking-action-label masking-redact">REDACT</span> ${redacted.map(f => escapeHtml(f)).join(", ")}</div>`;
+
+            maskingHtml = `
+                <details class="history-masking-details">
+                    <summary class="history-masking-summary">🛡️ Schema Masking: ${parts.join(" · ")}</summary>
+                    <div class="masking-detail-content">${detailsInner}</div>
+                </details>
+            `;
+        }
+
+        // Policy violations
+        let violationsHtml = "";
+        if (violations.length > 0) {
+            const vItems = violations.slice(0, 3).map(v => {
+                const sev = v.severity || "info";
+                const sevIcon = sev === "critical" ? "🔴" : sev === "warning" ? "🟡" : "🔵";
+                return `<div class="violation-row violation-${escapeHtml(sev)}">${sevIcon} <strong>[${escapeHtml(sev).toUpperCase()}]</strong> ${escapeHtml(v.message || "")}</div>`;
+            }).join("");
+            const moreV = violations.length > 3 ? `<div class="violation-row">...and ${violations.length - 3} more</div>` : "";
+            violationsHtml = `<div class="history-violations">${vItems}${moreV}</div>`;
+        }
+
+        // Override warning
+        const overrideWarning = (forceOverridden && sensitivity === "high")
+            ? `<div class="history-override-warning">⚠️ Manually overridden — data was masked before cloud routing</div>`
+            : "";
+
         return `
             <article class="history-item history-${escapeHtml(status)}">
-                <div>
-                    <div class="history-title">
-                        <span class="route-badge route-${escapeHtml(route)}">${escapeHtml(route).toUpperCase()} LLM</span>
-                        ${overrideBadge}
-                        <strong>${escapeHtml(sensitivity).toUpperCase()} sensitivity</strong>
-                    </div>
-                    <p>${escapeHtml(input)}</p>
-                    ${overrideWarning}
+                <div class="history-badges">
+                    ${classificationBadge}
+                    ${statusBadge}
+                    ${routeBadge}
                 </div>
+                <p class="history-input">${escapeHtml(input)}</p>
+                ${patternsHtml}
+                ${reasonHtml}
+                ${maskingHtml}
+                ${violationsHtml}
+                ${overrideWarning}
                 <div class="history-meta">
-                    <div>${Number.parseFloat(duration).toFixed(2)}ms</div>
-                    <div>${masked} masked</div>
-                    <div>${formatEpoch(request.timestamp)}</div>
+                    <div>⏱ ${Number.parseFloat(duration).toFixed(0)}ms</div>
+                    <div>🔒 ${masked} masked</div>
+                    <div>🕐 ${formatEpoch(request.timestamp)}</div>
                 </div>
             </article>
         `;
@@ -353,12 +524,28 @@ async function runSimulation() {
         const status = payload.result.status.toUpperCase();
         const sensitivity = (payload.result.routing.sensitivity_level || "unknown").toUpperCase();
         const patterns = Array.isArray(payload.result.routing.detected_patterns) ? payload.result.routing.detected_patterns : [];
-        const icons = { APPROVED: "✅", BLOCKED: "🔒", REJECTED: "❌" };
-        result.textContent = `${icons[status] || ""} ${status} — ${sensitivity} sensitivity → ${route} LLM`;
+        const icons = { APPROVED: "✅", REJECTED: "❌" };
+        
+        const classification = payload.dashboard?.history?.slice(-1)[0]?.data_classification || "PUBLIC";
+        const forceOverridden = payload.result.force_overridden || false;
+        const securedLocally = payload.result.secured_locally || false;
+        
+        let displayStatus = status;
+        let displayIcon = icons[status] || "";
+        
+        if (forceOverridden && (sensitivity === "HIGH" || classification === "COMPANY_SECRET")) {
+            displayStatus = "BLOCKED";
+            displayIcon = "⛔";
+        } else if (forceOverridden) {
+            displayStatus = "OVERRIDE";
+            displayIcon = "⚡";
+        } else if (securedLocally) {
+            displayStatus = "SECURED";
+            displayIcon = "🔒";
+        }
 
         const patternNote = patterns.length ? ` (detected: ${patterns.slice(0, 3).join(", ")}${patterns.length > 3 ? ", ..." : ""})` : "";
-        // Override the status line with a debug hint about what was detected.
-        result.textContent = `${icons[status] || ""} ${status} - ${sensitivity} sensitivity -> ${route} LLM${patternNote}`;
+        result.textContent = `${displayIcon} ${displayStatus} - ${sensitivity} sensitivity -> ${route} LLM${patternNote}`;
 
         // Display the simulated output generated by the backend
         if (payload.result.final_output) {

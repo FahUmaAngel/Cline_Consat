@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CONSAT Data Explorer — Policy Visualization</title>
-    <meta name="description" content="Explore Stockholm bus IoT data with per-column data classification policy badges showing PUBLIC, PII, and COMPANY_SECRET fields.">
+    <title>CONSAT Data Explorer — 4-Tier Policy Visualization</title>
+    <meta name="description" content="Explore Stockholm bus IoT data with per-column data classification policy badges showing PUBLIC, PII, SPII, and COMPANY_SECRET fields across Admin, Internal, and External views.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -30,8 +30,8 @@
 
             <div class="sidebar-card">
                 <span>Data Policy</span>
-                <strong>3-Tier Classification</strong>
-                <p>PUBLIC → share freely<br>PII → hash/encrypt<br>SECRET → redact completely</p>
+                <strong>4-Tier Classification</strong>
+                <p>PUBLIC → share freely<br>PII → visible internally, masked externally<br>SPII → always masked (never in LLM)<br>SECRET → visible internally, redacted externally</p>
             </div>
         </aside>
 
@@ -43,82 +43,23 @@
                 </div>
                 <div class="status-cluster">
                     <span id="record-count">0 records</span>
-                </div>
-            </header>
-
-            <main class="explorer-shell">
-                <!-- Summary Cards (table selector) -->
-                <section class="summary-grid" aria-label="Table selection">
-                    <article id="card-bus_routes" class="summary-card" data-table="bus_routes">
-                        <div class="card-title">
-                            <i class="fa-solid fa-route"></i>
-                            <span>Bus Routes</span>
-                        </div>
-                        <div class="field-counts">Loading...</div>
-                    </article>
-                    <article id="card-bus_vehicles" class="summary-card" data-table="bus_vehicles">
-                        <div class="card-title">
-                            <i class="fa-solid fa-bus"></i>
-                            <span>Vehicles</span>
-                        </div>
-                        <div class="field-counts">Loading...</div>
-                    </article>
-                    <article id="card-drivers" class="summary-card active" data-table="drivers">
-                        <div class="card-title">
-                            <i class="fa-solid fa-id-card"></i>
-                            <span>Drivers</span>
-                        </div>
-                        <div class="field-counts">Loading...</div>
-                    </article>
-                    <article id="card-iot_sensor_readings" class="summary-card" data-table="iot_sensor_readings">
-                        <div class="card-title">
-                            <i class="fa-solid fa-satellite-dish"></i>
-                            <span>IoT Readings</span>
-                        </div>
-                        <div class="field-counts">Loading...</div>
-                    </article>
-                    <article id="card-bus_stops" class="summary-card" data-table="bus_stops">
-                        <div class="card-title">
-                            <i class="fa-solid fa-map-pin"></i>
-                            <span>Bus Stops</span>
-                        </div>
-                        <div class="field-counts">Loading...</div>
-                    </article>
-                    <article id="card-maintenance_logs" class="summary-card" data-table="maintenance_logs">
-                        <div class="card-title">
-                            <i class="fa-solid fa-wrench"></i>
-                            <span>Maintenance</span>
-                        </div>
-                        <div class="field-counts">Loading...</div>
-                    </article>
-                    <article id="card-driver_shifts" class="summary-card" data-table="driver_shifts">
-                        <div class="card-title">
-                            <i class="fa-solid fa-calendar-days"></i>
-                            <span>Shifts</span>
-                        </div>
-                        <div class="field-counts">Loading...</div>
-                    </article>
-                    <article id="card-incidents" class="summary-card" data-table="incidents">
-                        <div class="card-title">
-                            <i class="fa-solid fa-triangle-exclamation"></i>
-                            <span>Incidents</span>
-                        </div>
-                        <div class="field-counts">Loading...</div>
-                    </article>
-                </section>
-
-                <!-- View Toggle -->
-                <section class="controls-bar" aria-label="View controls">
-                    <div class="view-selector">
-                        <button class="view-btn active" data-view="admin"><i class="fa-solid fa-user-gear"></i> Admin</button>
-                        <button class="view-btn" data-view="internal"><i class="fa-solid fa-building"></i> Internal</button>
-                        <button class="view-btn" data-view="external"><i class="fa-solid fa-handshake"></i> External</button>
+                    <div class="view-selector" role="radiogroup" aria-label="Access level selector">
+                        <button id="btn-admin" class="view-btn active" data-view="admin" type="button">
+                            <i class="fa-solid fa-user-gear"></i> Admin
+                        </button>
+                        <button id="btn-internal" class="view-btn" data-view="internal" type="button">
+                            <i class="fa-solid fa-building"></i> Internal
+                        </button>
+                        <button id="btn-external" class="view-btn" data-view="external" type="button">
+                            <i class="fa-solid fa-handshake"></i> External
+                        </button>
                     </div>
                     <span id="view-indicator" class="view-indicator admin-view"><i class="fa-solid fa-user-gear"></i> Admin View — All Data</span>
                     <div class="policy-legend">
-                        <span><i class="fa-solid fa-lock-open" style="color:#16a34a"></i> PUBLIC — share freely</span>
-                        <span><i class="fa-solid fa-user-shield" style="color:#d97706"></i> PII — hash / encrypt</span>
-                        <span><i class="fa-solid fa-ban" style="color:#dc2626"></i> SECRET — redact</span>
+                        <span><i class="fa-solid fa-lock-open" style="color:#16a34a"></i> PUBLIC</span>
+                        <span><i class="fa-solid fa-id-badge" style="color:#2563eb"></i> PII</span>
+                        <span><i class="fa-solid fa-user-shield" style="color:#e04e17"></i> SPII</span>
+                        <span><i class="fa-solid fa-ban" style="color:#dc2626"></i> SECRET</span>
                     </div>
                 </section>
 
@@ -157,6 +98,6 @@
         </div>
     </div>
 
-    <script src="/static/js/data-explorer.js"></script>
+    <script src="/static/js/data-explorer.js?v=3"></script>
 </body>
 </html>

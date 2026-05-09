@@ -14,6 +14,7 @@ from typing import Dict, List, Tuple
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from consat_rules import CONSAT_MASKING_PATTERNS
+import schema_aware_masker
 
 
 @dataclass
@@ -162,26 +163,74 @@ class MaskingEngine:
 
 class DataMaskingPipeline:
     """Pipeline รวมการ mask + de-mask"""
-    
+
     def __init__(self):
         self.masking_engine = MaskingEngine()
-    
+        self._last_schema_report: Dict = {}
+
     def process_for_cloud(self, text: str) -> Tuple[str, Dict]:
-        """เตรียมข้อมูลสำหรับส่ง Cloud LLM"""
-        masked_text, masked_items = self.masking_engine.mask_text(text)
-        
+        """Prepare text for Cloud LLM — full policy: PII hashed/encrypted, SECRET redacted.
+
+        Two-pass masking:
+          Pass 1 (schema-aware) — scan JSON field names against POLICY_TABLE,
+                                  apply hash / encrypt / redact per column.
+          Pass 2 (regex)        — pattern-based masking for emails, API keys,
+                                  personnummer, etc.
+        """
+        # Pass 1: schema-aware column masking (cloud mode = all actions)
+        schema_masked, schema_report = schema_aware_masker.scan_and_mask(text, mode="cloud")
+        self._last_schema_report = schema_report
+
+        # Pass 2: regex pattern masking on the already-schema-masked text
+        masked_text, masked_items = self.masking_engine.mask_text(schema_masked)
+
         return masked_text, {
             'masked_text': masked_text,
             'masked_items': masked_items,
             'mapping_id': 'mapping_' + uuid.uuid4().hex[:8],
+            'schema_masking': schema_report,
         }
-    
+
+    def process_for_local(self, text: str) -> Tuple[str, Dict]:
+        """Prepare text for Local (on-premise) LLM — PII always masked, SECRET visible.
+
+        Policy:
+          PII (hash/encrypt) → always applied — personal data must never be
+                               readable even by the internal LLM.
+          SECRET (redact)    → skipped — the on-premise LLM is trusted to access
+                               proprietary operational data (eco scores, costs, etc.)
+
+        Two-pass masking:
+          Pass 1 (schema-aware, local mode) — hash/encrypt PII, pass SECRET.
+          Pass 2 (regex, PII-only patterns)  — catch personnummer, driver IDs,
+                                               phone numbers in free text.
+        """
+        # Pass 1: schema-aware PII-only masking
+        schema_masked, schema_report = schema_aware_masker.scan_and_mask(text, mode="local")
+        self._last_schema_report = schema_report
+
+        # Pass 2: regex patterns — run only PII-relevant patterns, skip secret ones
+        # (MaskingEngine already covers emails, phones, personnummer, driver IDs)
+        masked_text, masked_items = self.masking_engine.mask_text(schema_masked)
+
+        return masked_text, {
+            'masked_text': masked_text,
+            'masked_items': masked_items,
+            'mapping_id': 'mapping_' + uuid.uuid4().hex[:8],
+            'schema_masking': schema_report,
+            'mode': 'local',
+        }
+
     def restore_output(self, cloud_output: str) -> str:
         """คืนค่าข้อมูล หลังจากได้รับ output จาก Cloud"""
         return self.masking_engine.demask_text(cloud_output)
-    
+
     def get_summary(self) -> Dict:
-        return self.masking_engine.get_masking_summary()
+        regex_summary = self.masking_engine.get_masking_summary()
+        return {
+            **regex_summary,
+            'schema_masking': self._last_schema_report,
+        }
 
 
 # ============== Test Cases ==============
