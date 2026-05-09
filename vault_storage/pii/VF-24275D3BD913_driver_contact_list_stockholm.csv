@@ -1,6 +1,0 @@
-driver_id,full_name,phone,email,assigned_vehicle,assigned_route
-D001,Erik Lindström,+46-70-123-4567,erik.lindstrom@keolis.se,V-1042,Route 172
-D002,Anna Johansson,+46-73-987-6543,anna.johansson@sl.se,V-1018,Route 4
-D003,Mohamed Hassan,+46-76-555-1234,mohamed.hassan@keolis.se,V-1035,Route 69
-D004,Sofia Andersson,+46-70-888-4321,sofia.andersson@sl.se,V-1022,Route 3
-D005,Karl Eriksson,+46-73-222-7890,karl.eriksson@keolis.se,V-1051,Route 76

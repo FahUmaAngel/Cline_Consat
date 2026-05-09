@@ -280,6 +280,36 @@ function updateAlerts(alerts, history) {
         const violations = req.policy_violations || [];
         const inputPreview = (req.input_preview || "").slice(0, 60);
 
+        // ── Vault upload events — dedicated alert logic ──────────
+        if (req.event_type === "vault_upload") {
+            const vf = req.vault_file || {};
+            const tier = vf.tier || "PUBLIC";
+            const fname = escapeHtml(vf.filename || "file");
+            if (tier === "SPII") {
+                combined.push({
+                    severity: "critical",
+                    message: `🔒 SPII file uploaded: "${fname}" — always masked, routed to LOCAL LLM only`,
+                    timestamp: req.timestamp,
+                    metric_type: "spii_vault",
+                });
+            } else if (tier === "SECRET") {
+                combined.push({
+                    severity: "warning",
+                    message: `🔐 SECRET file uploaded: "${fname}" — HIGH sensitivity, secured on LOCAL LLM`,
+                    timestamp: req.timestamp,
+                    metric_type: "vault_high",
+                });
+            } else if (tier === "PII") {
+                combined.push({
+                    severity: "info",
+                    message: `ℹ️ PII file uploaded: "${fname}" — personal data masked before any cloud transmission`,
+                    timestamp: req.timestamp,
+                    metric_type: "vault_pii",
+                });
+            }
+            continue; // skip regular classification checks for vault uploads
+        }
+
         if (classification === "COMPANY_SECRET" && route === "cloud") {
             combined.push({
                 severity: "critical",

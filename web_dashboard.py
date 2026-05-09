@@ -26,6 +26,7 @@ from secure_agentic_workflow import SecureAgenticWorkflow
 import stockholm_bus_data as bus_db
 import file_vault
 import data_policy
+import audit_log as _audit
 
 # Global components
 dashboard = None
@@ -90,6 +91,18 @@ def _classify_from_patterns(item):
     # No patterns detected → PUBLIC
     if not patterns:
         return "PUBLIC"
+
+    # Vault upload tier patterns (tier:SECRET, tier:SPII, tier:PII, tier:PUBLIC)
+    vault_tier_map = {
+        "tier:secret": "COMPANY_SECRET",
+        "tier:spii": "SPII",
+        "tier:pii": "PII",
+        "tier:public": "PUBLIC",
+    }
+    for p in patterns:
+        mapped = vault_tier_map.get(p.lower())
+        if mapped:
+            return mapped
 
     # Check for COMPANY_SECRET indicators in detected patterns
     secret_keywords = [
@@ -222,6 +235,22 @@ async def vault_upload(
     tier_to_status = {
         "PUBLIC": "approved", "PII": "approved", "SPII": "blocked", "SECRET": "approved"
     }
+
+    # ── Write ISO27001 audit trail entries ───────────────────────
+    trace_id = _audit.new_trace_id()
+    sensitivity_label = tier_to_sensitivity.get(assigned_tier, "low").upper()
+    llm_decision = tier_to_route.get(assigned_tier, "local")
+    _audit.log_routing(
+        sensitivity=sensitivity_label,
+        decision=llm_decision,
+        reason=f"Vault upload — auto-classified as {assigned_tier} → routed to {llm_decision.upper()} LLM",
+        trace_id=trace_id,
+    )
+    if assigned_tier in ("PII", "SPII", "SECRET"):
+        _audit.log_masking("vault_file", 1, trace_id=trace_id)
+    violations = 1 if assigned_tier == "SPII" else 0
+    _audit.log_policy_check(violations == 0, violations, trace_id=trace_id)
+
     if workflow:
         workflow.request_history.append({
             "event_type": "vault_upload",
@@ -248,6 +277,16 @@ async def vault_upload(
                 "size_bytes": entry["size_bytes"],
             },
         })
+
+    if workflow:
+        workflow.monitoring.record_request(
+            routing_decision=llm_decision,
+            processing_time=0,
+            masked_items=1 if assigned_tier in ("PII", "SPII", "SECRET") else 0,
+            policy_violations=violations,
+            sensitivity_level=tier_to_sensitivity.get(assigned_tier, "low"),
+            force_overridden=False,
+        )
 
     return {"success": True, "file": entry}
 
