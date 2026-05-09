@@ -90,3 +90,31 @@
 [10:43:22.195688] MAIN_START pid=5672
 [10:43:22.197308] SERVER_START
 [10:43:22.197308] READ_MSG waiting...
+[13:39:17.342018] READ_MSG got EOF
+[13:39:17.354842] SERVER_EOF — exiting
+[13:40:32.349723] MAIN_START pid=10708
+[13:40:32.351723] SERVER_START
+[13:40:32.353235] READ_MSG waiting...
+[13:40:32.354263] READ_MSG raw: b'{"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"Cline","version"'
+[13:40:32.355265] RECV initialize
+[13:40:32.356777] SEND response for initialize
+[13:40:32.358803] READ_MSG waiting...
+[13:40:33.107113] READ_MSG raw: b'{"method":"notifications/initialized","jsonrpc":"2.0"}\n'
+[13:40:33.108116] RECV notifications/initialized
+[13:40:33.109632] READ_MSG waiting...
+[13:40:33.559086] READ_MSG raw: b'{"method":"tools/list","jsonrpc":"2.0","id":1}\n'
+[13:40:33.561117] RECV tools/list
+[13:40:33.563139] SEND response for tools/list
+[13:40:33.564488] READ_MSG waiting...
+[13:40:37.699332] READ_MSG raw: b'{"method":"resources/list","jsonrpc":"2.0","id":2}\n'
+[13:40:37.700842] RECV resources/list
+[13:40:37.701865] SEND response for resources/list
+[13:40:37.703376] READ_MSG waiting...
+[13:40:37.973061] READ_MSG raw: b'{"method":"resources/templates/list","jsonrpc":"2.0","id":3}\n'
+[13:40:37.974061] RECV resources/templates/list
+[13:40:37.975063] SEND response for resources/templates/list
+[13:40:37.975572] READ_MSG waiting...
+[13:40:38.298997] READ_MSG raw: b'{"method":"prompts/list","jsonrpc":"2.0","id":4}\n'
+[13:40:38.300500] RECV prompts/list
+[13:40:38.301013] SEND response for prompts/list
+[13:40:38.302032] READ_MSG waiting...
