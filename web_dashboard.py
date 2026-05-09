@@ -63,11 +63,21 @@ def _get_dashboard():
 
 
 def _classify_from_patterns(item):
-    """Derive the 4-tier data classification from detected patterns and schema masking."""
-    patterns = item.get("routing", {}).get("detected_patterns", [])
-    schema = item.get("schema_masking", {})
+    """Derive the 4-tier data classification from the query's detected patterns.
 
-    # Check for COMPANY_SECRET indicators
+    Classification is based on what the USER ASKED (sensitivity router output),
+    not on what fields appeared in the database context.  The schema masker
+    always processes all columns of retrieved records, so redacted_fields being
+    non-empty does NOT mean the user asked for company secrets.
+    """
+    patterns = item.get("routing", {}).get("detected_patterns", [])
+    sensitivity = item.get("routing", {}).get("sensitivity_level", "low")
+
+    # No patterns detected → PUBLIC
+    if not patterns:
+        return "PUBLIC"
+
+    # Check for COMPANY_SECRET indicators in detected patterns
     secret_keywords = [
         "consat_eco_drive", "consat_iot_internal", "consat_operations",
         "consat_finance", "business_secret",
@@ -76,30 +86,30 @@ def _classify_from_patterns(item):
         any(kw in p.lower() for kw in secret_keywords)
         for p in patterns
     )
-    has_redacted = bool(schema.get("redacted_fields"))
-    if has_secret or has_redacted:
+    if has_secret:
         return "COMPANY_SECRET"
 
-    # Check for SPII indicators
-    spii_patterns = ["personnummer", "personal_number", "license_number"]
+    # Check for SPII indicators in detected patterns
+    spii_keywords = ["personnummer", "personal_number", "license_number"]
     has_spii = any(
-        any(kw in p.lower() for kw in spii_patterns)
+        any(kw in p.lower() for kw in spii_keywords)
         for p in patterns
     )
-    has_encrypted = bool(schema.get("encrypted_fields"))
-    if has_spii or has_encrypted:
+    if has_spii:
         return "SPII"
 
-    # Check for PII indicators
+    # Check for PII indicators in detected patterns
     pii_prefixes = ["PII:", "KEYWORD:consat_driver_pii"]
     has_pii = any(
         any(p.startswith(prefix) or prefix in p for prefix in pii_prefixes)
         for p in patterns
     )
-    has_hashed = bool(schema.get("hashed_fields"))
-    if has_pii or has_hashed:
+    if has_pii:
         return "PII"
 
+    # Patterns detected but none matched specific tiers — use sensitivity level
+    if sensitivity == "high":
+        return "PII"  # HIGH but unknown type → treat as PII
     return "PUBLIC"
 
 
@@ -117,6 +127,7 @@ def _serialize_history(limit: int = 20):
         row["masked_items_count"] = item.get("metrics", {}).get("masked_items_count", 0)
         row["critical_violations"] = item.get("policy_check", {}).get("critical_violations", 0)
         row["force_overridden"] = item.get("force_overridden", False)
+        row["secured_locally"] = item.get("secured_locally", False)
         row["force_route"] = item.get("force_route", "auto")
         # Rich policy data for the UI
         row["detected_patterns"] = item.get("routing", {}).get("detected_patterns", [])

@@ -771,7 +771,8 @@ select:focus {
 
 .decision-approved { background: #f0fdf4; color: var(--green); }
 .decision-rejected { background: #fff1f2; color: var(--red); }
-.decision-blocked  { background: #f5f3ff; color: var(--violet); }
+.decision-blocked  { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+.decision-override { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
 
 .history-item p {
     margin: 0;

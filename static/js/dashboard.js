@@ -181,7 +181,7 @@ function updateDashboard(data) {
     healthEl.style.color = healthColor(healthStatus);
 
     setText("route-mix", `${workflow.local_llm_used || stats.local_routing_count || 0} local / ${workflow.cloud_llm_used || stats.cloud_routing_count || 0} cloud`);
-    setText("decision-mix", `${workflow.approved || 0} approved / ${workflow.blocked || 0} blocked / ${workflow.rejected || 0} rejected`);
+    setText("decision-mix", `${workflow.approved || 0} approved / ${workflow.secured_locally || 0} secured locally / ${workflow.rejected || 0} rejected`);
     setText("masked-count", `${stats.total_masking_items || 0} masked items`);
     setText("masked-total", stats.total_masking_items || 0);
     setText("alert-count", `${stats.total_alerts || alerts.length || 0} active alerts`);
@@ -192,7 +192,7 @@ function updateDashboard(data) {
     setText("last-updated", `Updated ${formatTime(data.timestamp)}`);
 
     updateCharts(stats, workflow);
-    updateAlerts(alerts);
+    updateAlerts(alerts, history);
     updateHistory(history);
     flashCards();
 }
@@ -351,7 +351,7 @@ function updateAlerts(alerts, history) {
                     <span class="alert-type-badge">${escapeHtml(alert.metric_type || "metric")}</span>
                 </div>
                 <p class="alert-message">${escapeHtml(alert.message || "Alert")}</p>
-                <small class="alert-time">${formatAlertTime(alert.timestamp)}</small>
+                <small class="alert-time">${formatTime(alert.timestamp)}</small>
             </article>
         `;
     }).join("");
@@ -391,10 +391,19 @@ function updateHistory(history) {
         const classificationBadge = `<span class="classification-badge" style="background:${cc.bg};">${cc.icon} ${escapeHtml(classification)}</span>`;
 
         // Status badge
-        const statusIcons = { approved: "✅", blocked: "🔒", rejected: "❌" };
-        const statusBadge = forceOverridden
-            ? `<span class="decision-badge decision-override">⚡ OVERRIDE</span>`
-            : `<span class="decision-badge decision-${escapeHtml(status)}">${statusIcons[status] || ""} ${escapeHtml(status).toUpperCase()}</span>`;
+        const securedLocally = request.secured_locally || false;
+        const statusIcons = { approved: "✅", rejected: "❌" };
+        let statusBadge;
+        if (forceOverridden && (sensitivity === "high" || classification === "COMPANY_SECRET")) {
+            // Dangerous override: COMPANY_SECRET forced to Cloud → show BLOCKED
+            statusBadge = `<span class="decision-badge decision-blocked">⛔ BLOCKED</span>`;
+        } else if (forceOverridden) {
+            statusBadge = `<span class="decision-badge decision-override">⚡ OVERRIDE</span>`;
+        } else if (securedLocally) {
+            statusBadge = `<span class="decision-badge decision-approved">🔒 SECURED</span>`;
+        } else {
+            statusBadge = `<span class="decision-badge decision-${escapeHtml(status)}">${statusIcons[status] || ""} ${escapeHtml(status).toUpperCase()}</span>`;
+        }
 
         // Route badge
         const routeBadge = `<span class="route-badge route-${escapeHtml(route)}">${escapeHtml(route).toUpperCase()} LLM</span>`;
@@ -511,12 +520,28 @@ async function runSimulation() {
         const status = payload.result.status.toUpperCase();
         const sensitivity = (payload.result.routing.sensitivity_level || "unknown").toUpperCase();
         const patterns = Array.isArray(payload.result.routing.detected_patterns) ? payload.result.routing.detected_patterns : [];
-        const icons = { APPROVED: "✅", BLOCKED: "🔒", REJECTED: "❌" };
-        result.textContent = `${icons[status] || ""} ${status} — ${sensitivity} sensitivity → ${route} LLM`;
+        const icons = { APPROVED: "✅", REJECTED: "❌" };
+        
+        const classification = payload.dashboard?.history?.slice(-1)[0]?.data_classification || "PUBLIC";
+        const forceOverridden = payload.result.force_overridden || false;
+        const securedLocally = payload.result.secured_locally || false;
+        
+        let displayStatus = status;
+        let displayIcon = icons[status] || "";
+        
+        if (forceOverridden && (sensitivity === "HIGH" || classification === "COMPANY_SECRET")) {
+            displayStatus = "BLOCKED";
+            displayIcon = "⛔";
+        } else if (forceOverridden) {
+            displayStatus = "OVERRIDE";
+            displayIcon = "⚡";
+        } else if (securedLocally) {
+            displayStatus = "SECURED";
+            displayIcon = "🔒";
+        }
 
         const patternNote = patterns.length ? ` (detected: ${patterns.slice(0, 3).join(", ")}${patterns.length > 3 ? ", ..." : ""})` : "";
-        // Override the status line with a debug hint about what was detected.
-        result.textContent = `${icons[status] || ""} ${status} - ${sensitivity} sensitivity -> ${route} LLM${patternNote}`;
+        result.textContent = `${displayIcon} ${displayStatus} - ${sensitivity} sensitivity -> ${route} LLM${patternNote}`;
 
         // Display the simulated output generated by the backend
         if (payload.result.final_output) {

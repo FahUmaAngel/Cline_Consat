@@ -306,10 +306,13 @@ Answer the user's question using only the data above. Be concise and factual."""
 
         if not approved:
             final_status = 'rejected'
-        elif use_local and not force_overridden:
-            final_status = 'blocked'
         else:
             final_status = 'approved'
+
+        # Flag: request was auto-routed to local LLM for security
+        # (COMPANY_SECRET / HIGH sensitivity → local is the CORRECT path,
+        #  data is visible internally per policy — this is NOT a block)
+        secured_locally = use_local and not force_overridden
 
         # ========== Final Result ==========
         schema_report = (masking_info or {}).get('schema_masking', {})
@@ -318,6 +321,7 @@ Answer the user's question using only the data above. Be concise and factual."""
             'request_id': f"req_{int(time.time() * 1000)}",
             'user_input': user_input,
             'status': final_status,
+            'secured_locally': secured_locally,
             'force_overridden': force_overridden,
             'force_route': force_route if force_overridden else 'auto',
             'timestamp': time.time(),
@@ -352,9 +356,10 @@ Answer the user's question using only the data above. Be concise and factual."""
         # Store in history
         self.request_history.append(result)
         
-        status_icon = {"approved": "✅", "rejected": "❌", "blocked": "🔒"}.get(final_status, "ℹ️")
+        status_icon = {"approved": "✅", "rejected": "❌"}.get(final_status, "ℹ️")
+        local_note = " (🔒 Secured via Local LLM)" if secured_locally else ""
         print(f"\n{'='*80}")
-        print(f"{status_icon} WORKFLOW COMPLETE - Status: {result['status'].upper()}")
+        print(f"{status_icon} WORKFLOW COMPLETE - Status: {result['status'].upper()}{local_note}")
         print(f"{'='*80}\n")
         
         return result
@@ -370,7 +375,7 @@ Answer the user's question using only the data above. Be concise and factual."""
         
         approved_count = sum(1 for r in self.request_history if r['status'] == 'approved')
         rejected_count = sum(1 for r in self.request_history if r['status'] == 'rejected')
-        blocked_count  = sum(1 for r in self.request_history if r['status'] == 'blocked')
+        secured_locally_count = sum(1 for r in self.request_history if r.get('secured_locally', False))
         local_count = sum(1 for r in self.request_history if r['routing']['llm_used'] == 'local')
         cloud_count = sum(1 for r in self.request_history if r['routing']['llm_used'] == 'cloud')
         
@@ -381,7 +386,7 @@ Answer the user's question using only the data above. Be concise and factual."""
             'total_requests': len(self.request_history),
             'approved': approved_count,
             'rejected': rejected_count,
-            'blocked': blocked_count,
+            'secured_locally': secured_locally_count,
             'approval_rate': f"{(approved_count / len(self.request_history) * 100):.1f}%" if self.request_history else "0%",
             'local_llm_used': local_count,
             'cloud_llm_used': cloud_count,
