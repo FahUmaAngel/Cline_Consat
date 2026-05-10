@@ -290,6 +290,75 @@ async def vault_upload(
 
     return {"success": True, "file": entry}
 
+@app.post("/api/vault/analyze")
+async def vault_analyze(file: UploadFile = File(...)):
+    """Analyze a file during upload to suggest Tier, Tags, and Description."""
+    if not workflow:
+        return {"error": "Workflow not initialized"}
+
+    # Read a sample of the file
+    content = await file.read(10240) # Read up to 10KB
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        text = "" # Binary file
+
+    # Default fallback
+    tier = file_vault.auto_classify(file.filename)
+    reasoning = f"Based on file extension/naming heuristics."
+    
+    # Generate Tags from filename
+    name_parts = file.filename.split(".")[0].replace("-", " ").replace("_", " ").split()
+    tags = [p.lower() for p in name_parts if len(p) > 2][:3]
+
+    # Analyze text if available
+    detected_patterns = []
+    if text:
+        route_info = workflow.router.route(text)
+        sensitivity = route_info["sensitivity_level"]
+        detected_patterns = route_info.get("detected_patterns", [])
+
+        if detected_patterns:
+            # Map to Tier
+            if sensitivity == "high":
+                has_secret = any(p.startswith("SECRET:") or "business_secret" in p for p in detected_patterns)
+                has_spii = any("ssn" in p.lower() or "personal_number" in p.lower() or "personnummer" in p.lower() for p in detected_patterns)
+                if has_secret:
+                    tier = "SECRET"
+                elif has_spii:
+                    tier = "SPII"
+                else:
+                    tier = "PII"
+            elif sensitivity == "medium":
+                tier = "PII"
+                
+            formatted_patterns = ", ".join([p.split(":")[-1].replace("_", " ").title() for p in detected_patterns[:3]])
+            reasoning = f"Detected sensitive patterns ({formatted_patterns}). Auto-classified as {tier}."
+            
+            # Add patterns to tags
+            for p in detected_patterns[:2]:
+                tag = p.split(":")[-1].lower()
+                if tag not in tags:
+                    tags.append(tag)
+        else:
+            if tier == "PUBLIC":
+                reasoning = "No sensitive patterns detected in sample. Safe for PUBLIC sharing."
+
+    # Generate Description
+    desc_types = {
+        "PUBLIC": "Public document, safe to share externally.",
+        "PII": "Contains personal information. Masking required for external sharing.",
+        "SPII": "Contains highly sensitive personal data. Always masked.",
+        "SECRET": "Internal company secrets. Redacted for external viewers."
+    }
+    description = f"{file.filename} - {desc_types.get(tier, 'Document')}"
+
+    return {
+        "tier": tier,
+        "reasoning": reasoning,
+        "tags": ", ".join(tags[:4]),
+        "description": description
+    }
 @app.get("/api/vault/files")
 async def vault_list(
     tier: str = None,
