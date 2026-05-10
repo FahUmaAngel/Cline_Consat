@@ -1,7 +1,7 @@
 """
 Policy Enforcement Layer Prototype
 ====================================
-ตรวจสอบผลลัพธ์จาก LLM ตามนโยบายความปลอดภัย
+Validates LLM output against the security policy
 
 Author: CONSAT PoC Team
 Date: May 4, 2026
@@ -21,7 +21,7 @@ from consat_rules import (
 
 
 class PolicyViolationSeverity(Enum):
-    """ระดับความรุนแรงของการละเมิดนโยบาย"""
+    """Policy violation severity level"""
     INFO = "info"
     WARNING = "warning"
     CRITICAL = "critical"
@@ -29,7 +29,7 @@ class PolicyViolationSeverity(Enum):
 
 @dataclass
 class PolicyViolation:
-    """บันทึกการละเมิดนโยบาย"""
+    """Policy violation record"""
     timestamp: str
     violation_type: str
     severity: str
@@ -39,37 +39,37 @@ class PolicyViolation:
 
 
 class PolicyChecker:
-    """ตรวจสอบโค้ดตามนโยบาย CONSAT"""
-    
+    """Checks code against CONSAT policy"""
+
     def __init__(self):
-        """เตรียมการ policy rules"""
+        """Initialise policy rules"""
         self.violations: List[PolicyViolation] = []
-        
-        # Security-related patterns ที่ต้อง block
+
+        # Security-related patterns that must be blocked
         self.security_patterns = {
             'hardcoded_password': {
                 'regex': r'(?:password|passwd)\s*=\s*["\']([^"\']+)["\']',
                 'severity': PolicyViolationSeverity.CRITICAL,
                 'message': 'Hardcoded password found - use environment variables instead',
-                'recommendation': 'Use os.environ.get() หรือ config management',
+                'recommendation': 'Use os.environ.get() or a config management tool',
             },
             'hardcoded_api_key': {
                 'regex': r'(?:api[_-]?key|apikey)\s*=\s*["\']([a-zA-Z0-9_-]+)["\']',
                 'severity': PolicyViolationSeverity.CRITICAL,
                 'message': 'Hardcoded API key found - security risk',
-                'recommendation': 'Move to .env file หรือ secrets manager',
+                'recommendation': 'Move to a .env file or a secrets manager',
             },
             'sql_injection_risk': {
                 'regex': r'(?:SELECT|INSERT|UPDATE|DELETE).*f[\"\']',
                 'severity': PolicyViolationSeverity.CRITICAL,
                 'message': 'Potential SQL injection vulnerability (f-string with SQL)',
-                'recommendation': 'Use parameterized queries หรือ ORM',
+                'recommendation': 'Use parameterized queries or an ORM',
             },
             'insecure_deserialization': {
                 'regex': r'pickle\.loads|eval\(',
                 'severity': PolicyViolationSeverity.CRITICAL,
                 'message': 'Insecure deserialization/code execution detected',
-                'recommendation': 'Use json.loads() หรือ other safe alternatives',
+                'recommendation': 'Use json.loads() or other safe alternatives',
             },
         }
         self.security_patterns.update(
@@ -81,14 +81,14 @@ class PolicyChecker:
                 for name, config in CONSAT_SECURITY_PATTERNS.items()
             }
         )
-        
+
         # Compliance-related patterns
         self.compliance_patterns = {
             'no_audit_log': {
                 'regex': r'(?!.*(?:log|audit|record))database.*delete',
                 'severity': PolicyViolationSeverity.WARNING,
                 'message': 'Database operations without audit trail',
-                'recommendation': 'Add logging สำหรับทุก database operation',
+                'recommendation': 'Add logging for all database operations',
             },
             'missing_error_handling': {
                 'regex': r'(?:api|database|external).*call(?!.*try)',
@@ -112,7 +112,7 @@ class PolicyChecker:
                 for name, config in CONSAT_COMPLIANCE_PATTERNS.items()
             }
         )
-        
+
         # Library/Framework restrictions
         self.library_whitelist = {
             'allowed': [
@@ -128,11 +128,11 @@ class PolicyChecker:
         for library in CONSAT_FORBIDDEN_LIBRARIES:
             if library not in self.library_whitelist['forbidden']:
                 self.library_whitelist['forbidden'].append(library)
-    
+
     def check_security_issues(self, code: str) -> List[PolicyViolation]:
-        """ตรวจสอบปัญหาด้านความปลอดภัย"""
+        """Check for security issues"""
         issues = []
-        
+
         for pattern_name, pattern_config in self.security_patterns.items():
             matches = re.finditer(pattern_config['regex'], code, re.IGNORECASE | re.MULTILINE)
             for match in matches:
@@ -145,13 +145,13 @@ class PolicyChecker:
                     recommendation=pattern_config['recommendation'],
                 )
                 issues.append(violation)
-        
+
         return issues
-    
+
     def check_compliance(self, code: str) -> List[PolicyViolation]:
-        """ตรวจสอบการสอดคล้องตามนโยบาย CONSAT"""
+        """Check compliance with CONSAT policy"""
         issues = []
-        
+
         for pattern_name, pattern_config in self.compliance_patterns.items():
             matches = re.finditer(pattern_config['regex'], code, re.IGNORECASE | re.MULTILINE)
             for match in matches:
@@ -164,13 +164,13 @@ class PolicyChecker:
                     recommendation=pattern_config['recommendation'],
                 )
                 issues.append(violation)
-        
+
         return issues
-    
+
     def check_libraries(self, code: str) -> List[PolicyViolation]:
-        """ตรวจสอบ import statements"""
+        """Check import statements"""
         issues = []
-        
+
         # Check for forbidden libraries
         for forbidden_lib in self.library_whitelist['forbidden']:
             pattern = rf'(?:import|from)\s+{forbidden_lib}\b'
@@ -184,43 +184,43 @@ class PolicyChecker:
                     recommendation=f'Replace with CONSAT-approved alternative',
                 )
                 issues.append(violation)
-        
+
         return issues
-    
+
     def validate_code(self, code: str) -> Dict:
-        """ตรวจสอบโค้ดทั้งหมด"""
+        """Validate all code"""
         all_violations = []
         all_violations.extend(self.check_security_issues(code))
         all_violations.extend(self.check_compliance(code))
         all_violations.extend(self.check_libraries(code))
-        
+
         self.violations.extend(all_violations)
-        
-        # ตัดสินใจว่า approve หรือ reject
+
+        # Decide whether to approve or reject
         critical_count = sum(1 for v in all_violations if v.severity == 'critical')
-        
+
         return {
             'code_approved': critical_count == 0,
             'total_violations': len(all_violations),
             'critical_violations': critical_count,
             'violations': [asdict(v) for v in all_violations],
         }
-    
+
     def get_violation_summary(self) -> Dict:
-        """สรุป violations"""
+        """Summarise violations"""
         severity_counts = {
             'critical': 0,
             'warning': 0,
             'info': 0,
         }
-        
+
         violation_types = {}
-        
+
         for violation in self.violations:
             severity_counts[violation.severity] += 1
             violation_types[violation.violation_type] = \
                 violation_types.get(violation.violation_type, 0) + 1
-        
+
         return {
             'total_violations': len(self.violations),
             'severity_breakdown': severity_counts,
@@ -229,15 +229,15 @@ class PolicyChecker:
 
 
 class PolicyEnforcementPipeline:
-    """Pipeline สำหรับตรวจสอบ policy"""
-    
+    """Pipeline for policy validation"""
+
     def __init__(self):
         self.policy_checker = PolicyChecker()
-    
+
     def validate_ai_output(self, code: str) -> Dict:
-        """ตรวจสอบผลลัพธ์จาก AI"""
+        """Validate AI output"""
         return self.policy_checker.validate_code(code)
-    
+
     def get_summary(self) -> Dict:
         return self.policy_checker.get_violation_summary()
 
@@ -248,9 +248,9 @@ if __name__ == "__main__":
     print("=" * 80)
     print("POLICY ENFORCEMENT LAYER - PROTOTYPE TEST")
     print("=" * 80)
-    
+
     pipeline = PolicyEnforcementPipeline()
-    
+
     test_cases = [
         {
             'name': 'Test 1: Safe Code (PASS)',
@@ -304,29 +304,29 @@ def deserialize_data(data_bytes):
             ''',
         },
     ]
-    
+
     for test in test_cases:
         print(f"\n{test['name']}")
         print("-" * 80)
-        
+
         result = pipeline.validate_ai_output(test['code'])
-        
+
         print(f"Code snippet:\n{test['code'][:100]}...")
         print(f"\nApproved: {'✅ YES' if result['code_approved'] else '❌ NO'}")
         print(f"Total Violations: {result['total_violations']}")
         print(f"Critical Violations: {result['critical_violations']}")
-        
+
         if result['violations']:
             print(f"\nViolations:")
             for i, violation in enumerate(result['violations'][:2], 1):  # Show first 2
                 print(f"  {i}. [{violation['severity'].upper()}] {violation['message']}")
                 print(f"     → {violation['recommendation']}")
-    
+
     print("\n" + "=" * 80)
     print("POLICY VIOLATION SUMMARY")
     print("=" * 80)
     summary = pipeline.get_summary()
     for key, value in summary.items():
         print(f"{key}: {value}")
-    
+
     print("\n✅ Policy enforcement prototype test complete!")

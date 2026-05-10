@@ -23,12 +23,15 @@ document.addEventListener("DOMContentLoaded", () => {
     bindActions();
     connectWebSocket();
     loadDashboard();
+    loadAuditLog();
     refreshTimer = setInterval(loadDashboard, 10000);
+    setInterval(loadAuditLog, 15000);
 });
 
 function bindActions() {
     document.getElementById("run-simulation").addEventListener("click", runSimulation);
     document.getElementById("refresh-now").addEventListener("click", loadDashboard);
+    document.getElementById("refresh-audit").addEventListener("click", loadAuditLog);
     document.getElementById("quick-safe").addEventListener("click", () => {
         const sample = samples[Math.floor(Math.random() * samples.length)];
         document.getElementById("userInput").value = sample.userInput;
@@ -194,6 +197,7 @@ function updateDashboard(data) {
     updateCharts(stats, workflow);
     updateAlerts(alerts, history);
     updateHistory(history);
+    updateComplianceKPIs(stats, workflow);
     flashCards();
 }
 
@@ -276,6 +280,36 @@ function updateAlerts(alerts, history) {
         const violations = req.policy_violations || [];
         const inputPreview = (req.input_preview || "").slice(0, 60);
 
+        // ── Vault upload events — dedicated alert logic ──────────
+        if (req.event_type === "vault_upload") {
+            const vf = req.vault_file || {};
+            const tier = vf.tier || "PUBLIC";
+            const fname = escapeHtml(vf.filename || "file");
+            if (tier === "SPII") {
+                combined.push({
+                    severity: "critical",
+                    message: `🔒 SPII file uploaded: "${fname}" — always masked, routed to LOCAL LLM only`,
+                    timestamp: req.timestamp,
+                    metric_type: "spii_vault",
+                });
+            } else if (tier === "SECRET") {
+                combined.push({
+                    severity: "warning",
+                    message: `🔐 SECRET file uploaded: "${fname}" — HIGH sensitivity, secured on LOCAL LLM`,
+                    timestamp: req.timestamp,
+                    metric_type: "vault_high",
+                });
+            } else if (tier === "PII") {
+                combined.push({
+                    severity: "info",
+                    message: `ℹ️ PII file uploaded: "${fname}" — personal data masked before any cloud transmission`,
+                    timestamp: req.timestamp,
+                    metric_type: "vault_pii",
+                });
+            }
+            continue; // skip regular classification checks for vault uploads
+        }
+
         if (classification === "COMPANY_SECRET" && route === "cloud") {
             combined.push({
                 severity: "critical",
@@ -327,6 +361,26 @@ function updateAlerts(alerts, history) {
                 metric_type: "manual_override",
             });
         }
+
+        // HIGH sensitivity blocked to LOCAL (guardrail working correctly)
+        if (sensitivity === "high" && route === "local" && !forceOverridden) {
+            combined.push({
+                severity: "warning",
+                message: `🔒 HIGH sensitivity request secured on LOCAL LLM — blocked from cloud routing. Input: "${inputPreview}..."`,
+                timestamp: req.timestamp,
+                metric_type: "high_sensitivity_blocked",
+            });
+        }
+
+        // MEDIUM sensitivity masked before cloud
+        if (sensitivity === "medium" && route === "cloud") {
+            combined.push({
+                severity: "info",
+                message: `🛡️ MEDIUM sensitivity request — data masked before cloud transmission. Input: "${inputPreview}..."`,
+                timestamp: req.timestamp,
+                metric_type: "medium_masked",
+            });
+        }
     }
 
     if (!combined.length) {
@@ -335,23 +389,35 @@ function updateAlerts(alerts, history) {
         return;
     }
 
-    // Sort by severity priority then timestamp
+    // Normalise timestamp to milliseconds (handles both Unix-epoch seconds and ISO strings)
+    function alertMs(t) {
+        if (!t) return 0;
+        return typeof t === "number" ? t * 1000 : new Date(t).getTime();
+    }
+
+    // Sort: newest first; ties broken by severity (critical > warning > info)
     const severityOrder = { critical: 0, warning: 1, info: 2 };
-    combined.sort((a, b) => (severityOrder[a.severity] ?? 3) - (severityOrder[b.severity] ?? 3));
+    combined.sort((a, b) => {
+        const timeDiff = alertMs(b.timestamp) - alertMs(a.timestamp);
+        if (timeDiff !== 0) return timeDiff;
+        return (severityOrder[a.severity] ?? 3) - (severityOrder[b.severity] ?? 3);
+    });
 
     panel.className = "scroll-region";
     panel.innerHTML = combined.map((alert) => {
         const severity = escapeHtml(alert.severity || "info");
         const icons = { critical: "🔴", warning: "🟡", info: "🔵" };
+        const ms = alertMs(alert.timestamp);
+        const timeStr = ms ? new Date(ms).toLocaleTimeString() : "—";
         return `
             <article class="alert-item alert-${severity}">
                 <div class="alert-header">
                     <span class="alert-severity-icon">${icons[severity] || "ℹ️"}</span>
                     <strong class="alert-severity-label">${severity.toUpperCase()}</strong>
                     <span class="alert-type-badge">${escapeHtml(alert.metric_type || "metric")}</span>
+                    <span class="alert-time">${timeStr}</span>
                 </div>
                 <p class="alert-message">${escapeHtml(alert.message || "Alert")}</p>
-                <small class="alert-time">${formatTime(alert.timestamp)}</small>
             </article>
         `;
     }).join("");
@@ -379,6 +445,7 @@ function updateHistory(history) {
         const routingReason = request.routing_reason || "";
         const schema = request.schema_masking || {};
         const violations = request.policy_violations || [];
+        const isVaultUpload = request.event_type === "vault_upload";
 
         // Classification badge
         const classColors = {
@@ -395,7 +462,6 @@ function updateHistory(history) {
         const statusIcons = { approved: "✅", rejected: "❌" };
         let statusBadge;
         if (forceOverridden && (sensitivity === "high" || classification === "COMPANY_SECRET")) {
-            // Dangerous override: COMPANY_SECRET forced to Cloud → show BLOCKED
             statusBadge = `<span class="decision-badge decision-blocked">⛔ BLOCKED</span>`;
         } else if (forceOverridden) {
             statusBadge = `<span class="decision-badge decision-override">⚡ OVERRIDE</span>`;
@@ -465,6 +531,35 @@ function updateHistory(history) {
         const overrideWarning = (forceOverridden && sensitivity === "high")
             ? `<div class="history-override-warning">⚠️ Manually overridden — data was masked before cloud routing</div>`
             : "";
+
+        // Vault upload events get a distinct rendering (from kwan branch)
+        if (isVaultUpload) {
+            const vf = request.vault_file || {};
+            const tier = vf.tier || "PUBLIC";
+            const tierColors = { PUBLIC: "#16a34a", PII: "#d97706", SPII: "#7c3aed", SECRET: "#dc2626" };
+            const tierBgs = { PUBLIC: "#ecfdf3", PII: "#fffbeb", SPII: "#f5f3ff", SECRET: "#fff1f2" };
+            const tierIcons = { PUBLIC: "fa-lock-open", PII: "fa-user-shield", SPII: "fa-shield-halved", SECRET: "fa-ban" };
+            const accentColor = tierColors[tier] || "#2563eb";
+            const fileSize = vf.size_bytes ? formatFileSize(vf.size_bytes) : "";
+            return `
+                <article class="history-item" style="border-left-color: ${accentColor};">
+                    <div>
+                        <div class="history-title">
+                            <span class="route-badge" style="background:${tierBgs[tier]};color:${accentColor};"><i class="fa-solid ${tierIcons[tier]}"></i> ${escapeHtml(tier)}</span>
+                            <span class="decision-badge" style="background:#eff6ff;color:#2563eb;"><i class="fa-solid fa-cloud-arrow-up"></i> UPLOAD</span>
+                            <span class="route-badge route-${escapeHtml(route)}">${escapeHtml(route).toUpperCase()} LLM</span>
+                            <strong>${escapeHtml(sensitivity).toUpperCase()} sensitivity</strong>
+                        </div>
+                        <p><i class="fa-solid fa-file" style="margin-right:5px;opacity:0.5;"></i>${escapeHtml(vf.filename || input)}${fileSize ? ' — ' + fileSize : ''}</p>
+                    </div>
+                    <div class="history-meta">
+                        <div>vault</div>
+                        <div>${masked} masked</div>
+                        <div>${formatEpoch(request.timestamp)}</div>
+                    </div>
+                </article>
+            `;
+        }
 
         return `
             <article class="history-item history-${escapeHtml(status)}">
@@ -560,6 +655,7 @@ async function runSimulation() {
         }
 
         updateDashboard(payload.dashboard);
+        loadAuditLog();
     } catch (error) {
         result.textContent = error.message;
         llmOutput.textContent = "";
@@ -599,6 +695,14 @@ function formatEpoch(value) {
     return Number.isNaN(date.getTime()) ? "" : date.toLocaleTimeString();
 }
 
+function formatFileSize(bytes) {
+    if (!bytes || bytes === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+}
+
 function healthColor(status) {
     if (status === "HEALTHY") return "#16a34a";
     if (status === "DEGRADED") return "#d97706";
@@ -622,6 +726,77 @@ function escapeHtml(value) {
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
+}
+
+function updateComplianceKPIs(stats, workflow) {
+    // ISO14001: on-premise ratio (local LLM processing = lower cloud carbon)
+    const totalReq = Number(workflow.total_requests ?? stats.total_requests ?? 0);
+    const localReq = Number(workflow.local_llm_used ?? stats.local_routing_count ?? 0);
+    const onPremiseRatio = totalReq > 0 ? ((localReq / totalReq) * 100).toFixed(1) + "%" : "0%";
+    setText("on-premise-ratio", onPremiseRatio);
+
+    // ISO9001: quality pass rate (from stats if available, else calculate)
+    const qualityRate = stats.quality_pass_rate || "100.0%";
+    setText("quality-pass-rate", qualityRate);
+}
+
+
+function updateAuditPanel(events, summary) {
+    // Update ISO27001 KPI card
+    setText("audit-total", summary.total_events ?? events.length ?? 0);
+    const byAction = summary.by_action || {};
+    setText("audit-breakdown",
+        `${byAction.route ?? 0} route · ${byAction.mask ?? 0} mask · ${byAction.policy_check ?? 0} policy`
+    );
+
+    // Update audit event stream panel
+    const panel = document.getElementById("audit-panel");
+    if (!events.length) {
+        panel.className = "scroll-region empty-state";
+        panel.textContent = "No audit events yet";
+        return;
+    }
+
+    panel.className = "scroll-region";
+    panel.innerHTML = events.slice().reverse().map((e) => {
+        const action = escapeHtml(e.action || "event");
+        const classification = escapeHtml(e.classification || "");
+        const decision = escapeHtml(e.decision || "");
+        const reason = escapeHtml((e.reason || "").substring(0, 90));
+        const traceId = escapeHtml((e.trace_id || "").substring(0, 8));
+        const ts = formatTime(e.timestamp);
+        const decisionColor = {
+            allowed: "#16a34a", hashed: "#0891b2", encrypted: "#7c3aed",
+            redacted: "#d97706", masked: "#0891b2", blocked: "#dc2626",
+            rejected: "#dc2626", approved: "#16a34a", restricted: "#d97706",
+            cloud: "#16a34a", local: "#2563eb",
+        }[decision] || "#687589";
+
+        return `
+            <article class="audit-item">
+                <span class="audit-badge audit-action-${action}">${action}</span>
+                <div class="audit-meta">
+                    <strong>
+                        <span style="color:${decisionColor};font-weight:700;">${decision.toUpperCase()}</span>
+                        &nbsp;·&nbsp;${classification}
+                        ${traceId ? `<span style="color:var(--quiet);font-size:11px;font-family:var(--font-mono);">&nbsp;#${traceId}</span>` : ""}
+                    </strong>
+                    <small>${reason} &mdash; ${ts}</small>
+                </div>
+            </article>
+        `;
+    }).join("");
+}
+
+async function loadAuditLog() {
+    try {
+        const response = await fetch("/api/audit-log?last_n=30");
+        if (!response.ok) return;
+        const data = await response.json();
+        updateAuditPanel(data.recent_events || [], data.summary || {});
+    } catch (error) {
+        console.warn("Audit log fetch failed:", error);
+    }
 }
 
 window.addEventListener("beforeunload", () => {

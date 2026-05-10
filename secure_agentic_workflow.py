@@ -1,7 +1,7 @@
 """
 Secure Agentic Workflow Orchestrator
 ======================================
-บริหารจัดการและเชื่อมต่อทั้งหมดระบบ Task 4, 5, 6, 7
+Orchestrates and connects all components for Task 4, 5, 6, 7
 
 Author: CONSAT PoC Team
 Date: May 4, 2026
@@ -11,8 +11,10 @@ import time
 import json
 import requests
 import os
+import uuid
 from dotenv import load_dotenv
 from typing import Dict, Optional
+import audit_log
 
 load_dotenv()
 from sensitivity_router_prototype import SensitivityRouter, SensitivityLevel
@@ -20,14 +22,15 @@ from data_masking_prototype import DataMaskingPipeline
 from policy_enforcement_prototype import PolicyEnforcementPipeline
 from monitoring_dashboard_prototype import MonitoringDashboard
 import stockholm_bus_data as bus_db
+import data_policy
 import json
 
 
 class SecureAgenticWorkflow:
     """
-    Orchestrator สำหรับ Secure Agentic Workflow
-    
-    รวมทั้งหมด:
+    Orchestrator for the Secure Agentic Workflow.
+
+    Integrates:
     - Task 4: Sensitivity Router
     - Task 5: Data Masking Engine
     - Task 7: Monitoring Dashboard
@@ -45,41 +48,59 @@ class SecureAgenticWorkflow:
         self.monitoring = MonitoringDashboard()
         self.request_history = []
         
-    def _fetch_context(self, user_input: str) -> str:
-        """Query the real stockholm_bus_data database and return relevant data as context."""
+    def _fetch_context(self, user_input: str, is_local: bool = False) -> str:
+        """Query the real stockholm_bus_data database and return relevant data as context.
+
+        For LOCAL LLM: raw data (full fidelity).
+        For CLOUD LLM: fields are filtered through data_policy.filter_for_external().
+        """
+        def _filter(table: str, records: list) -> list:
+            if is_local:
+                return records
+            return [data_policy.filter_record_for_external(table, r) for r in records]
+
         try:
             text = user_input.lower()
-            
+
             # Specific vehicle lookup
             for v in bus_db.BUS_VEHICLES:
                 if v["vehicle_id"].lower() in text:
-                    drivers = bus_db.get_drivers(v["vehicle_id"])
-                    readings = bus_db.get_sensor_readings(vehicle_id=v["vehicle_id"])
+                    drivers = _filter("drivers", bus_db.get_drivers(v["vehicle_id"]))
+                    readings = _filter("iot_sensor_readings", bus_db.get_sensor_readings(vehicle_id=v["vehicle_id"])[:3])
+                    maintenance = _filter("maintenance_logs", bus_db.get_maintenance_logs(v["vehicle_id"]))
+                    vehicle_data = _filter("bus_vehicles", [v])[0]
                     return json.dumps({
-                        "vehicle": v,
+                        "vehicle": vehicle_data,
                         "drivers": drivers,
-                        "recent_sensor_readings": readings[:3]
+                        "recent_sensor_readings": readings,
+                        "maintenance_logs": maintenance,
                     }, indent=2)
-            
+
             # Specific driver lookup
             for d in bus_db.DRIVERS:
                 if d["driver_id"].lower() in text:
+                    driver_data = _filter("drivers", [d])[0]
                     readings = bus_db.get_sensor_readings()
-                    driver_readings = [r for r in readings if r["driver_id"] == d["driver_id"]]
-                    return json.dumps({"driver": d, "sensor_readings": driver_readings[:3]}, indent=2)
-            
+                    driver_readings = _filter("iot_sensor_readings", [r for r in readings if r["driver_id"] == d["driver_id"]][:3])
+                    shifts = _filter("driver_shifts", bus_db.get_shifts(driver_id=d["driver_id"])[:5])
+                    return json.dumps({"driver": driver_data, "sensor_readings": driver_readings, "shifts": shifts}, indent=2)
+
             # Line number lookup
             for route in bus_db.BUS_ROUTES:
                 if str(route["line_number"]) in text or route["line_name"].lower() in text:
-                    vehicles = bus_db.get_vehicles(route["route_id"])
-                    return json.dumps({"route": route, "vehicles": vehicles}, indent=2)
-            
-            # General search fallback
+                    vehicles = _filter("bus_vehicles", bus_db.get_vehicles(route["route_id"]))
+                    stops = _filter("bus_stops", bus_db.get_stops(route["route_id"])[:5])
+                    return json.dumps({"route": route, "vehicles": vehicles, "stops": stops}, indent=2)
+
+            # General search fallback (includes maintenance_logs, shifts, incidents)
             results = bus_db.search_data(user_input)
             return json.dumps({
-                "routes": results["routes"][:2],
-                "vehicles": results["vehicles"][:2],
-                "drivers": [{k: v for k, v in d.items() if k not in ("personal_number", "phone", "email")} for d in results["drivers"][:2]],
+                "routes":      results["routes"][:2],
+                "vehicles":    _filter("bus_vehicles",        results["vehicles"][:2]),
+                "drivers":     _filter("drivers",             results["drivers"][:2]),
+                "maintenance":  _filter("maintenance_logs",   results["maintenance"][:3]),
+                "shifts":      _filter("driver_shifts",       results["shifts"][:3]),
+                "incidents":   _filter("incidents",           results["incidents"][:3]),
             }, indent=2)
         except Exception as e:
             return f"[DB Error: {e}]"
@@ -149,7 +170,8 @@ class SecureAgenticWorkflow:
             Dict: Final result with all checks and decisions
         """
         start_time = time.time()
-        
+        trace_id = audit_log.new_trace_id()
+
         print(f"\n{'='*80}")
         print("🔐 SECURE AGENTIC WORKFLOW PROCESSING")
         print(f"{'='*80}")
@@ -173,6 +195,14 @@ class SecureAgenticWorkflow:
         print(f"  ├─ Sensitivity Level: {routing_result['sensitivity_level'].upper()}")
         print(f"  ├─ Detected Patterns: {routing_result['detected_patterns']}")
         print(f"  └─ Decision: {routing_result['routing_decision'].upper()}")
+
+        audit_log.log_routing(
+            sensitivity=routing_result['sensitivity_level'],
+            decision=routing_result['routing_decision'],
+            reason=routing_result.get('reason', ''),
+            trace_id=trace_id,
+            force_override=(force_route in ("cloud", "local")),
+        )
         
         # ========== Step 2: Route Decision ==========
         if use_local:
@@ -194,8 +224,10 @@ class SecureAgenticWorkflow:
             print(f"\n[Step 3] 🔒 Data Masking...")
             masked_input, masking_info = self.masking.process_for_cloud(user_input)
             
-            print(f"  ├─ Masked Items: {sum(len(v) for v in masking_info['masked_items'].values())}")
+            masked_count_step3 = sum(len(v) for v in masking_info['masked_items'].values())
+            print(f"  ├─ Masked Items: {masked_count_step3}")
             print(f"  └─ Mapping ID: {masking_info['mapping_id']}")
+            audit_log.log_masking("user_input", masked_count_step3, trace_id=trace_id)
             
             llm_to_use = "cloud"
         
@@ -206,7 +238,7 @@ class SecureAgenticWorkflow:
         else:
             # Fetch real data context from the database
             print(f"      [DB] Fetching real context from stockholm_bus_data...")
-            db_context = self._fetch_context(user_input)
+            db_context = self._fetch_context(user_input, is_local=use_local)
             
             if use_local:
                 # Local LLM — PII must still be masked (GDPR), SECRET stays visible
@@ -271,6 +303,8 @@ Answer the user's question using only the data above. Be concise and factual."""
         policy_result = self.policy.validate_ai_output(final_output)
         approved = policy_result['code_approved']
         
+        audit_log.log_policy_check(approved, policy_result['critical_violations'], trace_id=trace_id)
+
         if approved:
             print(f"  ✅ APPROVED (0 critical violations)")
         else:
@@ -319,6 +353,7 @@ Answer the user's question using only the data above. Be concise and factual."""
 
         result = {
             'request_id': f"req_{int(time.time() * 1000)}",
+            'trace_id': trace_id,
             'user_input': user_input,
             'status': final_status,
             'secured_locally': secured_locally,
@@ -419,7 +454,7 @@ if __name__ == "__main__":
     # Test Case 1: Safe Code Query -> Cloud LLM
     print("\n\n📌 TEST CASE 1: Simple Python Function")
     result1 = workflow.process(
-        user_input="สร้างฟังก์ชัน Python สำหรับคำนวณค่าเฉลี่ยของ list",
+        user_input="Create a Python function to calculate the average of a list",
         llm_output="def calculate_average(items):\n    return sum(items) / len(items)"
     )
     print(f"Result: {result1['status'].upper()}")
@@ -427,7 +462,7 @@ if __name__ == "__main__":
     # Test Case 2: Sensitive Code Query -> Local LLM
     print("\n\n📌 TEST CASE 2: Database Connection (SENSITIVE)")
     result2 = workflow.process(
-        user_input="สร้าง API client สำหรับเชื่อมต่อ postgresql://admin:MyPassword@db.internal:5432/users",
+        user_input="Create an API client to connect to postgresql://admin:MyPassword@db.internal:5432/users",
         llm_output="from config import get_db\ndb = get_db()"
     )
     print(f"Result: {result2['status'].upper()}")
@@ -435,7 +470,7 @@ if __name__ == "__main__":
     # Test Case 3: Code with Security Issues
     print("\n\n📌 TEST CASE 3: Code with Hardcoded Password")
     result3 = workflow.process(
-        user_input="ช่วยฉันเชื่อมต่อ database",
+        user_input="Help me connect to the database",
         llm_output='''
 def connect_db():
     conn = mysql.connector.connect(
@@ -452,7 +487,7 @@ def connect_db():
     # Test Case 4: Safe API Code
     print("\n\n📌 TEST CASE 4: Safe API Code")
     result4 = workflow.process(
-        user_input="ช่วยฉันเขียน FastAPI endpoint",
+        user_input="Help me write a FastAPI endpoint",
         llm_output='''
 from fastapi import FastAPI
 from config import get_api_key

@@ -4,13 +4,12 @@
 body { font-family: var(--font); }
 
 /* ---- Surface + spacing alignment with dashboard.css ---- */
-:root{
-    /* Match dashboard card rhythm without fighting its tokens */
+:root {
     --explorer-surface: rgba(255, 255, 255, 0.97);
-    --explorer-border: var(--line);
-    --explorer-radius: var(--radius);
-    --explorer-shadow: var(--shadow-sm);
-    --explorer-pad: 20px;
+    --explorer-border:  var(--line);
+    --explorer-radius:  var(--radius);
+    --explorer-shadow:  var(--shadow-sm);
+    --explorer-pad:     20px;
 }
 
 /* Shared "panel" look for explorer sections/cards */
@@ -70,16 +69,6 @@ body { font-family: var(--font); }
     padding: 24px clamp(16px, 2.4vw, 34px) 44px;
 }
 
-/* ---- Policy Legend ---- */
-.policy-legend {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    color: #64748b;
-    font-size: var(--text-sm);
-    font-weight: 700;
-}
-
 /* ---- Summary Cards ---- */
 .summary-grid {
     display: grid;
@@ -135,16 +124,18 @@ body { font-family: var(--font); }
     font-size: var(--text-xs);
 }
 
-/* ---- View Selector (3-position) ---- */
+/* ---- Controls Bar ---- */
 .controls-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: 16px 18px;
+    padding: 14px 18px;
     margin-bottom: 16px;
+    flex-wrap: wrap;
 }
 
+/* ---- View Selector (3-position) ---- */
 .view-selector {
     display: flex;
     gap: 4px;
@@ -193,6 +184,7 @@ body { font-family: var(--font); }
     box-shadow: 0 4px 12px rgba(217, 119, 6, 0.3);
 }
 
+/* ---- View Indicator Badge ---- */
 .view-indicator {
     display: inline-flex;
     align-items: center;
@@ -218,13 +210,27 @@ body { font-family: var(--font); }
     color: #d97706;
 }
 
+/* ---- Policy Legend ---- */
+.policy-legend {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    color: #64748b;
+    font-size: var(--text-sm);
+    font-weight: 600;
+}
+
 /* ---- Data Table ---- */
 .table-panel {
     overflow: hidden;
+    margin-bottom: 0;
 }
 
 .table-scroll {
     overflow-x: auto;
+    max-height: 480px;
+    overflow-y: auto;
 }
 
 .data-table {
@@ -314,7 +320,7 @@ body { font-family: var(--font); }
 /* ---- Query Classifier ---- */
 .classifier-panel {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 300px;
+    grid-template-columns: minmax(0, 1fr) 320px;
     gap: 16px;
     margin-top: 20px;
 }
@@ -353,6 +359,7 @@ body { font-family: var(--font); }
     outline: none;
     background: #fbfdff;
     color: #132033;
+    transition: border-color 150ms, box-shadow 150ms;
 }
 
 .query-input-row input:focus {
@@ -435,7 +442,7 @@ body { font-family: var(--font); }
     font-family: var(--font-mono);
 }
 
-/* ---- Transition Animation ---- */
+/* ---- Loading animation ---- */
 .data-table tbody {
     transition: opacity 200ms ease;
 }

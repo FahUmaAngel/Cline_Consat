@@ -50,7 +50,6 @@
     function renderCell(value) {
         if (value === null || value === undefined) return "";
         const str = String(value);
-
         if (currentView === "admin") return escapeHtml(str);
 
         if (str.startsWith("HASH:")) {
@@ -201,9 +200,10 @@
 
         // Update indicator
         const cfg = viewConfig[view];
-        viewIndicator.className = "view-indicator " + cfg.cls;
-        viewIndicator.innerHTML = cfg.html;
-
+        if (viewIndicator && cfg) {
+            viewIndicator.className = "view-indicator " + cfg.cls;
+            viewIndicator.innerHTML = cfg.html;
+        }
         loadTable();
     }
 

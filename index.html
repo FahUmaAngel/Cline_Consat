@@ -18,9 +18,13 @@
             overflow: hidden;
             background: #eef3f8;
         }
-    </style>
+</style>
 </head>
 <body>
-    <iframe src="/templates/dashboard.html" title="CONSAT Command Center"></iframe>
+    <iframe id="dashboard-frame" title="CONSAT Command Center"></iframe>
+    <script>
+        const isFile = window.location.protocol === "file:";
+        document.getElementById("dashboard-frame").src = isFile ? "./templates/dashboard.html" : "/";
+    </script>
 </body>
 </html>
