@@ -290,6 +290,124 @@ async def vault_upload(
 
     return {"success": True, "file": entry}
 
+@app.post("/api/vault/analyze")
+async def vault_analyze(file: UploadFile = File(...)):
+    """Analyze a file during upload to suggest Tier, Tags, and Description."""
+    if not workflow:
+        return {"error": "Workflow not initialized"}
+
+    # Read a sample of the file
+    content = await file.read(10240) # Read up to 10KB
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        text = "" # Binary file
+
+    # Default fallback
+    tier = file_vault.auto_classify(file.filename)
+    reasoning = f"Based on file extension/naming heuristics."
+    
+    # Generate Tags from filename
+    name_parts = file.filename.split(".")[0].replace("-", " ").replace("_", " ").split()
+    tags = [p.lower() for p in name_parts if len(p) > 2][:3]
+
+    # Analyze text if available
+    detected_patterns = []
+    if text:
+        route_info = workflow.router.route(text)
+        sensitivity = route_info["sensitivity_level"]
+        detected_patterns = route_info.get("detected_patterns", [])
+
+        if detected_patterns:
+            # Map to Tier
+            if sensitivity == "high":
+                has_secret = any(p.startswith("SECRET:") or "business_secret" in p for p in detected_patterns)
+                has_spii = any("ssn" in p.lower() or "personal_number" in p.lower() or "personnummer" in p.lower() for p in detected_patterns)
+                if has_secret:
+                    tier = "SECRET"
+                elif has_spii:
+                    tier = "SPII"
+                else:
+                    tier = "PII"
+            elif sensitivity == "medium":
+                tier = "PII"
+                
+            formatted_patterns = ", ".join([p.split(":")[-1].replace("_", " ").title() for p in detected_patterns[:3]])
+            reasoning = f"Detected sensitive patterns ({formatted_patterns}). Auto-classified as {tier}."
+            
+            # Add patterns to tags
+            for p in detected_patterns[:2]:
+                tag = p.split(":")[-1].lower()
+                if tag not in tags:
+                    tags.append(tag)
+        else:
+            if tier == "PUBLIC":
+                reasoning = "No sensitive patterns detected in sample. Safe for PUBLIC sharing."
+
+    # Generate Description
+    import re
+    desc_base = {
+        "PUBLIC": "Public document",
+        "PII": "Document with personal information",
+        "SPII": "Sensitive personal data record",
+        "SECRET": "Confidential internal document"
+    }
+    
+    context = ""
+    if text:
+        # Look for years
+        years = sorted(list(set(re.findall(r'\b(20[1-2][0-9])\b', text))))
+        if years:
+            if len(years) > 1:
+                context += f" spanning from {years[0]} to {years[-1]}"
+            else:
+                context += f" for year {years[0]}"
+        
+        # Look for document types in first 500 chars
+        head = text[:500].lower()
+        if "financial" in head or "cost" in head or "budget" in head:
+            context = " regarding financial data" + context
+        elif "report" in head:
+            context = " containing reporting data" + context
+        elif "log" in head or "status" in head:
+            context = " containing system logs" + context
+            
+        # Add primary pattern context if found
+        if detected_patterns:
+            top_pattern = detected_patterns[0].split(":")[-1].replace("_", " ").lower()
+            context += f", including {top_pattern}"
+    
+    if not context:
+        context = " (auto-classified based on naming/heuristics)"
+        
+    description = f"{desc_base.get(tier, 'Document')}{context}."
+
+    # Try to use OpenRouter LLM for a better description if API key is set
+    if text and getattr(workflow, "OPENROUTER_API_KEY", None):
+        prompt = f"Analyze this file snippet and provide a short, 1-sentence description of what it contains (e.g. 'Financial report spanning 2023 to 2024 with cost data'). Do not include any conversational filler. File: {file.filename}\n\nSnippet:\n{text[:2000]}\n\nDescription:"
+        import asyncio
+        def _get_desc():
+            try:
+                return workflow._call_openrouter(prompt, is_local=False)
+            except Exception:
+                return ""
+        
+        llm_desc = await asyncio.to_thread(_get_desc)
+        
+        # If it's a real response and not the simulated fallback
+        if llm_desc and "[Cloud LLM" not in llm_desc and "simulated response" not in llm_desc.lower():
+            llm_desc = llm_desc.strip()
+            if llm_desc.startswith('"') and llm_desc.endswith('"'):
+                llm_desc = llm_desc[1:-1]
+            if llm_desc:
+                description = llm_desc
+
+    return {
+        "tier": tier,
+        "reasoning": reasoning,
+        "tags": ", ".join(tags[:4]),
+        "description": description
+    }
 @app.get("/api/vault/files")
 async def vault_list(
     tier: str = None,

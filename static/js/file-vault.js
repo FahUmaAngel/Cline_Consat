@@ -255,6 +255,12 @@
         renderQueue();
         $("#upload-modal").style.display = "grid";
         $("#submit-upload").disabled = true;
+        
+        // Reset fields
+        $("#upload-tier").value = "";
+        $("#upload-tags").value = "";
+        $("#upload-desc").value = "";
+        $("#upload-reasoning").style.display = "none";
     }
 
     function closeUpload() {
@@ -358,13 +364,59 @@
         });
     }
 
-    function addFilesToQueue(fileList) {
+    async function addFilesToQueue(fileList) {
         for (const f of fileList) {
             if (!pendingFiles.some(p => p.name === f.name && p.size === f.size)) {
                 pendingFiles.push(f);
             }
         }
         renderQueue();
+        
+        if (pendingFiles.length > 0) {
+            await autoAnalyzeFile(pendingFiles[0]);
+        }
+    }
+
+    async function autoAnalyzeFile(file) {
+        const submitBtn = $("#submit-upload");
+        const reasoningDiv = $("#upload-reasoning");
+        
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Analyzing...';
+        reasoningDiv.style.display = "block";
+        reasoningDiv.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Analyzing file sensitivity...';
+        reasoningDiv.style.borderLeftColor = "var(--text-secondary)";
+
+        const fd = new FormData();
+        fd.append("file", file);
+
+        try {
+            const result = await api("POST", "/api/vault/analyze", fd, true);
+            if (result.tier) {
+                $("#upload-tier").value = result.tier;
+                $("#upload-tags").value = result.tags || "";
+                $("#upload-desc").value = result.description || "";
+                
+                reasoningDiv.innerHTML = `<strong>Suggested Tier: ${result.tier}</strong><br>${result.reasoning}`;
+                
+                const colors = {
+                    "PUBLIC": "#16a34a",
+                    "PII": "#d97706",
+                    "SPII": "#7c3aed",
+                    "SECRET": "#dc2626"
+                };
+                reasoningDiv.style.borderLeftColor = colors[result.tier] || "#3b82f6";
+            } else {
+                reasoningDiv.style.display = "none";
+            }
+        } catch (err) {
+            console.error("Analysis failed", err);
+            reasoningDiv.innerHTML = "Analysis failed. You can set fields manually.";
+            reasoningDiv.style.borderLeftColor = "#dc2626";
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fa-solid fa-upload"></i> Upload';
+        }
     }
 
     /* ── File Detail Modal ─────────────────────────────────── */
