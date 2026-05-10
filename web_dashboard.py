@@ -382,6 +382,26 @@ async def vault_analyze(file: UploadFile = File(...)):
         
     description = f"{desc_base.get(tier, 'Document')}{context}."
 
+    # Try to use OpenRouter LLM for a better description if API key is set
+    if text and getattr(workflow, "OPENROUTER_API_KEY", None):
+        prompt = f"Analyze this file snippet and provide a short, 1-sentence description of what it contains (e.g. 'Financial report spanning 2023 to 2024 with cost data'). Do not include any conversational filler. File: {file.filename}\n\nSnippet:\n{text[:2000]}\n\nDescription:"
+        import asyncio
+        def _get_desc():
+            try:
+                return workflow._call_openrouter(prompt, is_local=False)
+            except Exception:
+                return ""
+        
+        llm_desc = await asyncio.to_thread(_get_desc)
+        
+        # If it's a real response and not the simulated fallback
+        if llm_desc and "[Cloud LLM" not in llm_desc and "simulated response" not in llm_desc.lower():
+            llm_desc = llm_desc.strip()
+            if llm_desc.startswith('"') and llm_desc.endswith('"'):
+                llm_desc = llm_desc[1:-1]
+            if llm_desc:
+                description = llm_desc
+
     return {
         "tier": tier,
         "reasoning": reasoning,
