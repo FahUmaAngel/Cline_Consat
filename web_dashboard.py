@@ -345,13 +345,42 @@ async def vault_analyze(file: UploadFile = File(...)):
                 reasoning = "No sensitive patterns detected in sample. Safe for PUBLIC sharing."
 
     # Generate Description
-    desc_types = {
-        "PUBLIC": "Public document, safe to share externally.",
-        "PII": "Contains personal information. Masking required for external sharing.",
-        "SPII": "Contains highly sensitive personal data. Always masked.",
-        "SECRET": "Internal company secrets. Redacted for external viewers."
+    import re
+    desc_base = {
+        "PUBLIC": "Public document",
+        "PII": "Document with personal information",
+        "SPII": "Sensitive personal data record",
+        "SECRET": "Confidential internal document"
     }
-    description = f"{file.filename} - {desc_types.get(tier, 'Document')}"
+    
+    context = ""
+    if text:
+        # Look for years
+        years = sorted(list(set(re.findall(r'\b(20[1-2][0-9])\b', text))))
+        if years:
+            if len(years) > 1:
+                context += f" spanning from {years[0]} to {years[-1]}"
+            else:
+                context += f" for year {years[0]}"
+        
+        # Look for document types in first 500 chars
+        head = text[:500].lower()
+        if "financial" in head or "cost" in head or "budget" in head:
+            context = " regarding financial data" + context
+        elif "report" in head:
+            context = " containing reporting data" + context
+        elif "log" in head or "status" in head:
+            context = " containing system logs" + context
+            
+        # Add primary pattern context if found
+        if detected_patterns:
+            top_pattern = detected_patterns[0].split(":")[-1].replace("_", " ").lower()
+            context += f", including {top_pattern}"
+    
+    if not context:
+        context = " (auto-classified based on naming/heuristics)"
+        
+    description = f"{desc_base.get(tier, 'Document')}{context}."
 
     return {
         "tier": tier,
