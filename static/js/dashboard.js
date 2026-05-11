@@ -280,6 +280,19 @@ function updateAlerts(alerts, history) {
         const violations = req.policy_violations || [];
         const inputPreview = (req.input_preview || "").slice(0, 60);
 
+        // ── Injection blocked events ─────────────────────────────
+        if (req.event_type === "injection_blocked") {
+            const preview = escapeHtml((req.input_preview || req.user_input || "").slice(0, 80));
+            const patterns = (req.detected_patterns || []).slice(0, 2).map(escapeHtml).join(", ");
+            combined.push({
+                severity: "critical",
+                message: `🚨 PROMPT INJECTION BLOCKED — Guardrail intercepted attempt to bypass security controls. Matched: "${patterns || 'suspicious pattern'}". Input: "${preview}..."`,
+                timestamp: req.timestamp,
+                metric_type: "injection_blocked",
+            });
+            continue;
+        }
+
         // ── Vault upload events — dedicated alert logic ──────────
         if (req.event_type === "vault_upload") {
             const vf = req.vault_file || {};
@@ -532,6 +545,32 @@ function updateHistory(history) {
             ? `<div class="history-override-warning">⚠️ Manually overridden — data was masked before cloud routing</div>`
             : "";
 
+        // Injection blocked events — special BLOCKED card
+        if (request.event_type === "injection_blocked") {
+            const preview = escapeHtml((request.input_preview || request.user_input || "").slice(0, 120));
+            const patterns = (request.detected_patterns || []).slice(0, 3).map(p =>
+                `<span class="pattern-tag pattern-secret">${escapeHtml(p)}</span>`
+            ).join("");
+            const reason = escapeHtml(request.routing_reason || "Prompt injection / policy bypass attempt");
+            return `
+                <article class="history-item" style="border-left-color:#dc2626;background:#fff1f2;">
+                    <div class="history-content">
+                        <div class="history-badges">
+                            <span class="classification-badge" style="background:#dc2626;">🚨 INJECTION BLOCKED</span>
+                            <span class="decision-badge decision-blocked">⛔ GUARDRAIL</span>
+                        </div>
+                        <p class="history-input" style="color:#991b1b;">${preview}</p>
+                        ${patterns ? `<div class="history-patterns"><span class="patterns-label">🔍 Matched:</span> ${patterns}</div>` : ""}
+                        <div class="history-reason" style="background:#fee2e2;color:#991b1b;">${reason}</div>
+                    </div>
+                    <div class="history-meta">
+                        <div style="color:#dc2626;font-weight:700;">BLOCKED</div>
+                        <div>🕐 ${formatEpoch(request.timestamp)}</div>
+                    </div>
+                </article>
+            `;
+        }
+
         // Vault upload events get a distinct rendering (from kwan branch)
         if (isVaultUpload) {
             const vf = request.vault_file || {};
@@ -563,17 +602,19 @@ function updateHistory(history) {
 
         return `
             <article class="history-item history-${escapeHtml(status)}">
-                <div class="history-badges">
-                    ${classificationBadge}
-                    ${statusBadge}
-                    ${routeBadge}
+                <div class="history-content">
+                    <div class="history-badges">
+                        ${classificationBadge}
+                        ${statusBadge}
+                        ${routeBadge}
+                    </div>
+                    <p class="history-input">${escapeHtml(input)}</p>
+                    ${patternsHtml}
+                    ${reasonHtml}
+                    ${maskingHtml}
+                    ${violationsHtml}
+                    ${overrideWarning}
                 </div>
-                <p class="history-input">${escapeHtml(input)}</p>
-                ${patternsHtml}
-                ${reasonHtml}
-                ${maskingHtml}
-                ${violationsHtml}
-                ${overrideWarning}
                 <div class="history-meta">
                     <div>⏱ ${Number.parseFloat(duration).toFixed(0)}ms</div>
                     <div>🔒 ${masked} masked</div>

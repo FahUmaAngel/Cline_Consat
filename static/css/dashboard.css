@@ -925,12 +925,13 @@ select:focus {
 .decision-blocked  { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
 .decision-override { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
 
-.history-item p {
+.history-content p {
     margin: 0;
     color: var(--muted);
     font-size: var(--text-base);
     font-weight: 500;
     word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 .history-meta {
@@ -1009,6 +1010,7 @@ select:focus {
     .route-layout { grid-template-columns: 1fr; }
 
     .history-item { display: block; }
+    .history-content { margin-bottom: 8px; }
     .history-meta { margin-top: 8px; text-align: left; }
 }
 
@@ -1030,6 +1032,11 @@ select:focus {
 }
 
 /* ── Enriched Policy Styles ─────────────────────────────────── */
+.history-content {
+    min-width: 0;
+    overflow: hidden;
+}
+
 .history-badges {
     display: flex;
     align-items: center;

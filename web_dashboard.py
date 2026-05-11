@@ -17,6 +17,7 @@ from datetime import datetime
 from pathlib import Path
 import asyncio
 import io
+import json
 import time
 import uvicorn
 
@@ -140,12 +141,46 @@ def _classify_from_patterns(item):
     return "PUBLIC"
 
 
+_MCP_HISTORY_PATH = BASE_DIR / "mcp_history.jsonl"
+
+
+def _read_mcp_history() -> list:
+    """Read history entries written by the MCP server process via mcp_history.jsonl."""
+    if not _MCP_HISTORY_PATH.exists():
+        return []
+    try:
+        entries = []
+        with open(_MCP_HISTORY_PATH, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        entries.append(json.loads(line))
+                    except Exception:
+                        pass
+        return entries
+    except Exception:
+        return []
+
+
 def _serialize_history(limit: int = 20):
     if not workflow:
         return []
 
+    # Merge in-memory history (from simulate/vault) with file-based MCP history
+    in_memory = list(workflow.request_history)
+    in_memory_ids = {r.get("request_id") for r in in_memory}
+
+    all_items = in_memory[:]
+    for entry in _read_mcp_history():
+        if entry.get("request_id") not in in_memory_ids:
+            all_items.append(entry)
+
+    # Sort by timestamp ascending so tail gives newest N
+    all_items.sort(key=lambda x: x.get("timestamp", 0))
+
     serialized = []
-    for item in workflow.request_history[-limit:]:
+    for item in all_items[-limit:]:
         row = dict(item)
         row["input_preview"] = item.get("user_input", "Workflow request")
         row["route"] = item.get("routing", {}).get("llm_used", "unknown")
@@ -166,10 +201,44 @@ def _serialize_history(limit: int = 20):
     return serialized
 
 
+_seen_mcp_ids: set = set()  # track which mcp_history entries we've already recorded
+
+
+def _ingest_mcp_history() -> None:
+    """Feed MCP history file entries into the monitoring dashboard (idempotent)."""
+    if not workflow:
+        return
+    for entry in _read_mcp_history():
+        rid = entry.get("request_id", "")
+        if rid in _seen_mcp_ids:
+            continue
+        _seen_mcp_ids.add(rid)
+        routing  = entry.get("routing", {})
+        metrics  = entry.get("metrics", {})
+        pc       = entry.get("policy_check", {})
+        try:
+            workflow.monitoring.record_request(
+                routing_decision  = routing.get("llm_used", "cloud"),
+                processing_time   = float(metrics.get("processing_time_ms", 0)),
+                masked_items      = int(metrics.get("masked_items_count", 0)),
+                policy_violations = int(pc.get("critical_violations", 0)),
+                sensitivity_level = routing.get("sensitivity_level", "low"),
+                force_overridden  = entry.get("force_overridden", False),
+            )
+            # Also keep in-memory request_history for the ws broadcast
+            in_mem_ids = {r.get("request_id") for r in workflow.request_history}
+            if rid not in in_mem_ids:
+                workflow.request_history.append(entry)
+        except Exception:
+            pass
+
+
 def _payload(history_limit: int = 20):
     current_dashboard = _get_dashboard()
     if not current_dashboard:
         raise HTTPException(status_code=503, detail="Dashboard not initialized")
+
+    _ingest_mcp_history()  # pull in any new MCP tool calls before building the payload
 
     stats = current_dashboard.calculator.calculate_stats()
     health = current_dashboard.get_health_status()
@@ -665,9 +734,61 @@ async def mcp_track(request_data: dict):
                 force_overridden  = False,
             )
 
+        elif tool == "consat_policy_check":
+            validation = result.get("result", {})
+            approved   = validation.get("code_approved", True)
+            violations = validation.get("critical_violations", 0)
+            code_snippet = result.get("code_snippet", args.get("code", ""))[:80]
+            entry = {
+                "request_id":   f"mcp_pc_{int(_time.time()*1000)}",
+                "user_input":   f"[Cline policy check] {code_snippet}",
+                "status":       "approved" if approved else "rejected",
+                "force_overridden": False,
+                "force_route":  "auto",
+                "timestamp":    _time.time(),
+                "routing": {"decision": "local", "reason": "Policy check (no LLM routing)", "llm_used": "local", "sensitivity_level": "n/a", "detected_patterns": []},
+                "masking":      None,
+                "policy_check": {"approved": approved, "total_violations": violations, "critical_violations": violations, "violations": validation.get("violations", [])},
+                "metrics":      {"processing_time_ms": "0", "masked_items_count": 0},
+                "final_output": None,
+            }
+            workflow.request_history.append(entry)
+            workflow.monitoring.record_request(
+                routing_decision="local", processing_time=0,
+                masked_items=0, policy_violations=violations,
+                sensitivity_level="n/a", force_overridden=False,
+            )
+
+        elif tool == "consat_data_policy":
+            table = args.get("table", "")
+            query = args.get("query", "")
+            label = f"table:{table}" if table else f"query:{query[:60]}"
+            entry = {
+                "request_id":   f"mcp_dp_{int(_time.time()*1000)}",
+                "user_input":   f"[Cline data policy] {label}",
+                "status":       "approved",
+                "force_overridden": False,
+                "force_route":  "auto",
+                "timestamp":    _time.time(),
+                "routing": {"decision": "local", "reason": "Data policy inspection", "llm_used": "local", "sensitivity_level": "low", "detected_patterns": []},
+                "masking":      None,
+                "policy_check": {"approved": True, "total_violations": 0, "critical_violations": 0, "violations": []},
+                "metrics":      {"processing_time_ms": "0", "masked_items_count": 0},
+                "final_output": None,
+            }
+            workflow.request_history.append(entry)
+            workflow.monitoring.record_request(
+                routing_decision="local", processing_time=0,
+                masked_items=0, policy_violations=0,
+                sensitivity_level="low", force_overridden=False,
+            )
+
         return {"success": True}
 
     except Exception as e:
+        import traceback
+        tb = traceback.format_exc(limit=3)
+        print(f"[mcp_track ERROR] tool={tool} err={e}\n{tb}", flush=True)
         return {"success": False, "error": str(e)}
 
 
@@ -790,8 +911,10 @@ async def websocket_metrics(websocket: WebSocket):
 
             try:
                 await websocket.send_json(_payload())
-            except Exception as e:
-                await websocket.send_json({"error": str(e)})
+            except WebSocketDisconnect:
+                break
+            except Exception:
+                break
 
     except WebSocketDisconnect:
         if websocket in active_connections:
